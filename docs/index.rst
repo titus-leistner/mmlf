@@ -7,6 +7,7 @@ Welcome to mmlf's documentation!
 
    getting-started
    commands
+   modules
 
 Indices and tables
 ==================
