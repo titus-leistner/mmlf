@@ -13,3 +13,6 @@ matplotlib
 colorama
 tqdm
 terminaltables
+scikit-image
+torch
+torchvision
