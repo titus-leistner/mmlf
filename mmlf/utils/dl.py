@@ -1,69 +1,71 @@
 import torch
 import numpy as np
 
-import os
-import json
 import warnings
 
 
-def save_hyper_params(hp, param_dir):
+class ModelSaver:
     """
-    Output the hyper parameters as JSON-file to
-    param_dir/hyper_params.json
-
-    :param hp: hyper-parameters as dictionary
-    :type hp: dict
-
-    :param param_dir: directory to save the json file to
-    :type param_dir: str
+    Class to save models.
+    Call an instance to save your model during training
     """
-    f = open(os.path.join(param_dir, 'hyper_params.json'), 'w')
-    json.dump(hp, f, ensure_ascii=False, indent=4)
-    f.close()
 
+    def __init__(self, only_best=False):
+        """
+        :param only_best: save only the best model (lowest loss) so far?
+        :type only_best: bool
+        """
+        self.only_best = only_best
+        self.best_loss = None
 
-def load_model_params(net, params):
-    """
-    Load model parameters from .pt file
+    def __call__(self, fname, model, optimizer=None, hyper_parameters=None,
+                 epoch=None, iteraration=None, loss=None):
+        """
+        Save a model
 
-    :param net: the network
-    :type net: torch.nn.Module
+        :param fname: path to the .pt file
+        :type fname: str
 
-    :param params: the filename of the parameter file
-    :type params: str
-    """
-    print('Loading parameters from "{}"...'.format(params))
-    loaded = torch.load(params)
-    old = loaded.state_dict()
+        :param model: the model
+        :type model: torch.nn.Module
 
-    if hasattr(loaded, 'module'):
-        old = loaded.module.state_dict()
+        :param optimizer: the optimizer
+        :type optimizer: torch.optim.Optimizer
 
-    new = net.state_dict()
-    new = {k: new[k] for k in new.keys() if k not in old.keys()}
-    new.update(old)
+        :param hyper_parameters: dictionary containing hyper_parameters
+        :type hyper_parameters: dict
 
-    net.load_state_dict(new)
-    for p in net.parameters():
-        p.requires_grad = False
-        p[torch.isnan(p)] = 0.0
-        p.requires_grad = True
+        :param epoch: the current training epoch
+        :type epoch: int
 
+        :param iteration: the current training iteration (number of batch)
+        :type iteraration: int
 
-def save_model_params(i, net, param_dir):
-    """
-    Output the model parameters to param_dir/params_i.pt
+        :param loss: the current validation loss
+        :type loss: float
+        """
+        if self.only_best and loss is not None:
+            if self.best_loss is not None and self.best_loss < loss:
+                return
+            self.best_loss = loss
 
-    :param i: training iteration
-    :type i: int
+        model_state_dict = model.state_dict()
 
-    :param net: the network model
-    :type net: torch.nn.Module
+        optimizer_state_dict = None
 
-    :param param_dir: directory to save the pt-file to
-    :type param_dir: str
-    """
-    torch.save(net, os.path.join(param_dir, 'params_%04d.pt' % i))
+        if optimizer is not None:
+            optimizer_state_dict = optimizer.state_dict()
+
+        state = {
+            'model_state_dict': model_state_dict,
+            'optimizer_state_dict': optimizer_state_dict,
+            'hyper_parameters': hyper_parameters,
+            'epoch': epoch,
+            'iteration': iteraration,
+            'loss': loss
+        }
+
+        torch.save(state, fname)
 
 
 def save_img(fname, arr):
@@ -95,7 +97,7 @@ def save_img(fname, arr):
     # save image
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        skimage.io.imsave(fname, arr)
+        skimage.io.imsave(fname, skimage.img_as_ubyte(arr))
 
 
 class BatchIter:

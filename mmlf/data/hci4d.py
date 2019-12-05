@@ -137,7 +137,7 @@ class HCI4D(Dataset):
 
     def __len__(self):
         # TODO: dirty hack to create bigger batches after augmentation
-        # return 4096
+        return 4096
         if self.length == 0:
             return len(self.scenes)
 
@@ -292,10 +292,10 @@ class RandomZoom:
 
     def __init__(self, min_scale=0.5, max_scale=1.0):
         """
-        :param min_scale: minumum possible scale
+        :param min_scale: minimum possible scale
         :type min_scale: float
 
-        :param max_scale: minumum possible scale
+        :param max_scale: maximum possible scale
         :type max_scale: float
         """
         self.interval = (min_scale, max_scale)
@@ -306,6 +306,53 @@ class RandomZoom:
         zoom = Zoom(factor)
 
         return zoom(data)
+
+
+class DownSampling:
+    """
+    Downsample the light field
+    """
+
+    def __init__(self, factor):
+        """
+        :param factor: downsampling factor 1/factor * width is the new width
+        :type factor: int
+        """
+        self.factor = factor
+
+    def __call__(self, data):
+        data = list(data)
+        for i in range(len(data)):
+            shape = data[i].shape
+            if len(shape) < 2 or shape[-1] <= 1 or shape[-2] <= 1:
+                continue
+            data[i] = data[i][..., ::self.factor, ::self.factor]
+
+        # correct ground truth
+        if len(data) > 3:
+            data[3] /= float(self.factor)
+
+        return tuple(data)
+
+
+class RandomDownSampling:
+    """
+    Downsample the light field randomly
+    """
+
+    def __init__(self, max_factor=4):
+        """
+        :param max_factor: maximum downsampling factor
+        :type max_factor: int
+        """
+        self.max_factor = max_factor
+
+    def __call__(self, data):
+        factor = random.randint(1, self.max_factor)
+
+        down_sampling = DownSampling(factor)
+
+        return down_sampling(data)
 
 
 class Crop:
