@@ -226,12 +226,21 @@ class HCI4D(Dataset):
 
             # save results, uncertainties and/or runtimes
             if result is not None:
-                dl.save_img(os.path.join(
-                    scene_dir, 'result.png'), result[arr_i])
-
-                res_out = np.flip(result[arr_i], 0)
+                # save result as pfm
+                res_out = np.flip(result[arr_i].copy(), 0)
                 pfm.save(os.path.join(scene_dir, 'result.pfm'), res_out)
                 pfm.save(os.path.join(disp_maps, f'{scene}.pfm'), res_out)
+
+                # normalize and clip result
+                disp_min = np.min(gt)
+                disp_max = np.max(gt)
+                res_img = result[arr_i].copy()
+                res_img = (res_img - disp_min) / (disp_max - disp_min)
+                res_img = np.clip(res_img, 0.0, 1.0)
+
+                # save result as png
+                dl.save_img(os.path.join(
+                    scene_dir, 'result.png'), res_img)
 
             if uncert is not None:
                 dl.save_img(os.path.join(
