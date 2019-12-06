@@ -155,7 +155,6 @@ class HCI4D(Dataset):
 
         # load mask
         fname = os.path.join(scene, 'mask.png')
-        mask = None
         if not os.path.exists(fname):
             mask = np.ones_like(gt, dtype=np.bool)
         else:
@@ -193,7 +192,6 @@ class HCI4D(Dataset):
         """
         index = index % len(self.scenes)
 
-        data = None
         if self.cache:
             data = self.data[index]
         else:
@@ -569,7 +567,6 @@ class RedistColor:
         for i in range(min(5, len(data))):
             if data[i] is None:
                 continue
-            stack = None
             if isinstance(data[i], np.ndarray):
                 stack = data[i].copy()
             else:

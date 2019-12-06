@@ -49,7 +49,11 @@ class ModelSaver:
                 return
             self.best_loss = loss
 
-        model_state_dict = model.state_dict()
+        # get model state dict, try model.module (for DataParallel) first
+        try:
+            model_state_dict = model.module.state_dict()
+        except AttributeError:
+            model_state_dict = model.state_dict()
 
         optimizer_state_dict = None
 

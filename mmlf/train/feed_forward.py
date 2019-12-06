@@ -75,6 +75,8 @@ def main(output_dir, **kwargs):
 
         i = state['iteration']
 
+    model = torch.nn.DataParallel(model)
+
     # logging
     mode = 'a' if kwargs['train_resume'] else 'w'
     log = open(os.path.join(output_dir, 'log.csv'), mode)
