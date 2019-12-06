@@ -39,7 +39,6 @@ class FeedForward(nn.Module):
         self.chs = model_chs
         self.views = model_views
         self.cross = model_cross
-        print(self.cross)
 
         if model_ksize % 2 == 1:
             self.padding1 = model_ksize // 2
