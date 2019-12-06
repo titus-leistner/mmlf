@@ -28,8 +28,10 @@ import click
 def main(output_dir, **kwargs):
     # initialize transforms
     transform = transforms.Compose([
-        hci4d.RandomDownSampling(2),
-        hci4d.RandomCrop(kwargs['train_ps']),
+        hci4d.RandomDownSampling(),
+        hci4d.RandomShift(2),
+        hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
+        hci4d.CenterCrop(kwargs['train_ps']),
         hci4d.RandomRotate(),
         hci4d.RedistColor(),
         hci4d.Brightness(),
@@ -60,6 +62,11 @@ def main(output_dir, **kwargs):
         state = torch.load(os.path.join(output_dir, 'checkpoint.pt'))
         model.load_state_dict(state['model_state_dict'])
         optimizer.load_state_dict(state['optimizer_state_dict'])
+
+        # manually set new learning rate
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = kwargs['train_lr']
+
         i = state['iteration']
 
     # logging
