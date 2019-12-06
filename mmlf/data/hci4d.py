@@ -153,7 +153,15 @@ class HCI4D(Dataset):
 
         index = np.atleast_1d(index)
 
-        return h_views, v_views, i_views, d_views, center, gt, index
+        # load mask
+        fname = os.path.join(scene, 'mask.png')
+        mask = None
+        if not os.path.exists(fname):
+            mask = np.ones_like(gt, dtype=np.bool)
+        else:
+            mask = skimage.io.imread(fname)[:, :, 0] > 0
+
+        return h_views, v_views, i_views, d_views, center, gt, mask, index
 
     def cache_scenes(self):
         """
@@ -246,8 +254,8 @@ class HCI4D(Dataset):
             scene_dir = os.path.join(scenes, scene)
 
             # get scene images
-            h_views, v_views, i_views, d_views, center, gt, _ = self.__getitem__(
-                i)
+            h_views, v_views, i_views, d_views, center, gt, mask, _ = \
+                self.__getitem__(i)
 
             lf.save_views(scene_dir, h_views, v_views, i_views, d_views)
             dl.save_img(os.path.join(scene_dir, 'center.png'), center)
@@ -274,6 +282,10 @@ class HCI4D(Dataset):
             if uncert is not None:
                 dl.save_img(os.path.join(
                     scene_dir, 'uncert.png'), uncert[arr_i])
+
+            # if mask is not None:
+            #     dl.save_img(os.path.join(
+            #         scene_dir, 'mask.png'), mask)
 
             if runtime is not None:
                 # devide runtime by batchsize and output
@@ -816,7 +828,7 @@ class Rotate90:
 
         data = list(data)
 
-        for i in range(min(6, len(data))):
+        for i in range(min(7, len(data))):
             axis = list(range(len(data[i].shape)))
             axis[-1], axis[-2] = axis[-2], axis[-1]
             data[i] = flip(view(data[i], axis), -2).copy()

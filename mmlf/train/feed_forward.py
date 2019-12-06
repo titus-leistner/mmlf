@@ -89,13 +89,16 @@ def main(output_dir, **kwargs):
     while True:
         for data in trainloader:
             # train
-            h_views, v_views, i_views, d_views, center, gt, index = data
+            h_views, v_views, i_views, d_views, center, gt, mask, index = data
             h_views = h_views.cuda()
             v_views = v_views.cuda()
             i_views = i_views.cuda()
             d_views = d_views.cuda()
             gt = gt.cuda()
-            mask = loss.create_mask(
+            mask = mask.cuda()
+
+            # add margin to mask
+            mask &= loss.create_mask(
                 gt.shape, kwargs['train_loss_margin']).cuda()
 
             # no loss if no texture
@@ -128,7 +131,7 @@ def main(output_dir, **kwargs):
                     mse_avg = 0.0
                     bad_pix_avg = 0.0
                     for j, data in enumerate(valloader):
-                        h_views, v_views, i_views, d_views, center, gt, index = data
+                        h_views, v_views, i_views, d_views, center, gt, _, index = data
                         h_views = h_views.cuda()
                         v_views = v_views.cuda()
                         i_views = i_views.cuda()
