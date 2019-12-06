@@ -83,6 +83,13 @@ class HCI4D(Dataset):
         us = [int(h / 2) * w + i for i in range(h)]
         vs = [int(w / 2) + w * i for i in range(h)]
 
+        # and for diagonals
+        ids = [w - i - 1 + w * i for i in range(h)]
+        ids.reverse()
+        dds = [i + w * i for i in range(h)]
+
+        # load views
+        # horizontal
         h_views = []
         for i in us:
             fname = imgs[i]
@@ -92,6 +99,7 @@ class HCI4D(Dataset):
         h_views = np.stack(h_views)
         h_views = h_views.transpose((0, 3, 1, 2))
 
+        # vertical
         v_views = []
         for i in vs:
             fname = imgs[i]
@@ -100,6 +108,26 @@ class HCI4D(Dataset):
                 skimage.io.imread(fname)).astype(np.float32))
         v_views = np.stack(v_views)
         v_views = v_views.transpose((0, 3, 1, 2))
+
+        # increasing (rising) diagonal
+        i_views = []
+        for i in ids:
+            fname = imgs[i]
+            fname = os.path.join(scene, fname)
+            i_views.append(skimage.img_as_float(
+                skimage.io.imread(fname)).astype(np.float32))
+        i_views = np.stack(i_views)
+        i_views = i_views.transpose((0, 3, 1, 2))
+
+        # decreasing (falling) diagonal
+        d_views = []
+        for i in dds:
+            fname = imgs[i]
+            fname = os.path.join(scene, fname)
+            d_views.append(skimage.img_as_float(
+                skimage.io.imread(fname)).astype(np.float32))
+        d_views = np.stack(d_views)
+        d_views = d_views.transpose((0, 3, 1, 2))
 
         # extract center view
         center = v_views[int(h / 2)].copy()
@@ -125,7 +153,7 @@ class HCI4D(Dataset):
 
         index = np.atleast_1d(index)
 
-        return h_views, v_views, center, gt, index
+        return h_views, v_views, i_views, d_views, center, gt, index
 
     def cache_scenes(self):
         """
@@ -218,9 +246,10 @@ class HCI4D(Dataset):
             scene_dir = os.path.join(scenes, scene)
 
             # get scene images
-            h_views, v_views, center, gt, _ = self.__getitem__(i)
+            h_views, v_views, i_views, d_views, center, gt, _ = self.__getitem__(
+                i)
 
-            lf.save_views(scene_dir, h_views, v_views)
+            lf.save_views(scene_dir, h_views, v_views, i_views, d_views)
             dl.save_img(os.path.join(scene_dir, 'center.png'), center)
             dl.save_img(os.path.join(scene_dir, 'gt.png'), gt)
 
@@ -288,8 +317,8 @@ class Zoom:
             data[i] = ndimage.zoom(data[i], zoom, order=0)
 
         # correct ground truth
-        if len(data) > 3:
-            data[3] *= float(self.factor)
+        if len(data) > 5:
+            data[5] *= float(self.factor)
 
         return tuple(data)
 
@@ -338,8 +367,8 @@ class DownSampling:
             data[i] = data[i][..., ::self.factor, ::self.factor]
 
         # correct ground truth
-        if len(data) > 3:
-            data[3] /= float(self.factor)
+        if len(data) > 5:
+            data[5] /= float(self.factor)
 
         return tuple(data)
 
@@ -525,7 +554,9 @@ class RedistColor:
         mat[2, 1] = 1.0 - mat[0, 1] - mat[1, 1]
         mat[2, 2] = mat[0, 0] + mat[0, 1] + mat[1, 0] + mat[1, 1] - 1.0
 
-        for i in range(min(3, len(data))):
+        for i in range(min(5, len(data))):
+            if data[i] is None:
+                continue
             stack = None
             if isinstance(data[i], np.ndarray):
                 stack = data[i].copy()
@@ -575,7 +606,10 @@ class Contrast:
         mean = data[0].mean()
 
         data = list(data)
-        for i in range(min(3, len(data))):
+        for i in range(min(5, len(data))):
+            if data[i] is None:
+                continue
+
             data[i] = data[i] * alpha + mean * (1.0 - alpha)
 
         return tuple(data)
@@ -606,7 +640,10 @@ class Brightness:
         alpha = random.uniform(-self.level, self.level) + 1.0
 
         data = list(data)
-        for i in range(min(3, len(data))):
+        for i in range(min(5, len(data))):
+            if data[i] is None:
+                continue
+
             data[i] = data[i] * alpha
 
         return tuple(data)
@@ -635,7 +672,10 @@ class Noise:
         :returns: the recolored lightfield data
         """
         data = list(data)
-        for i in range(min(3, len(data))):
+        for i in range(min(5, len(data))):
+            if data[i] is None:
+                continue
+
             noise = np.random.normal(scale=self.stdev, size=data[i].shape)
             data[i] += noise
 
@@ -673,6 +713,8 @@ class Shift:
 
         h_views = data[0]
         v_views = data[1]
+        i_views = data[2]
+        d_views = data[3]
 
         w = h_views.shape[-4]
         h = v_views.shape[-4]
@@ -684,16 +726,28 @@ class Shift:
             h_views[..., i, :, :, :] = cat(
                 [h_views[..., i, :, :, -shift:],
                  h_views[..., i, :, :, :-shift]], -1)
+            i_views[..., i, :, :, :] = cat(
+                [i_views[..., i, :, :, -shift:],
+                 i_views[..., i, :, :, :-shift]], -1)
+            d_views[..., i, :, :, :] = cat(
+                [d_views[..., i, :, :, -shift:],
+                 d_views[..., i, :, :, :-shift]], -1)
 
         for i in range(h):
             shift = self.disp * (i - hh)
             v_views[..., i, :, :, :] = cat(
                 [v_views[..., i, :, -shift:, :],
                  v_views[..., i, :, :-shift, :]], -2)
+            i_views[..., i, :, :, :] = cat(
+                [i_views[..., i, :, shift:, :],
+                 i_views[..., i, :, :shift, :]], -2)
+            d_views[..., i, :, :, :] = cat(
+                [d_views[..., i, :, -shift:, :],
+                 d_views[..., i, :, :-shift, :]], -2)
 
         # correct ground truth
-        if len(data) > 3:
-            data[3] -= float(self.disp)
+        if len(data) > 5:
+            data[5] -= float(self.disp)
 
         return tuple(data)
 
@@ -762,7 +816,7 @@ class Rotate90:
 
         data = list(data)
 
-        for i in range(min(4, len(data))):
+        for i in range(min(6, len(data))):
             axis = list(range(len(data[i].shape)))
             axis[-1], axis[-2] = axis[-2], axis[-1]
             data[i] = flip(view(data[i], axis), -2).copy()
@@ -770,6 +824,10 @@ class Rotate90:
         if len(data) > 1:
             data[0], data[1] = data[1], data[0]
             data[1] = flip(data[1], -4)
+
+        if len(data) > 3 and data[2] is not None and data[3] is not None:
+            data[2], data[3] = data[3], data[2]
+            data[3] = flip(data[3], -4)
 
         return tuple(data)
 

@@ -13,7 +13,7 @@ class FeedForward(nn.Module):
     """
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
-                 model_chs, model_views, **kwargs):
+                 model_chs, model_views, model_cross, **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -29,12 +29,17 @@ class FeedForward(nn.Module):
 
         :param model_views: number of light field views
         :type model_views: int
+
+        :param cross: only cross setup?
+        :type cross: bool
         """
         super(FeedForward, self).__init__()
 
         self.ksize = model_ksize
         self.chs = model_chs
         self.views = model_views
+        self.cross = model_cross
+        print(self.cross)
 
         if model_ksize % 2 == 1:
             self.padding1 = model_ksize // 2
@@ -45,7 +50,11 @@ class FeedForward(nn.Module):
             self.padding2 = model_ksize // 2 - 1
 
         # construct network
-        self.in_net = self.init_in_net(model_in_blocks)
+        self.in_net_hv = self.init_in_net(model_in_blocks)
+
+        if not model_cross:
+            self.in_net_id = self.init_in_net(model_in_blocks)
+
         self.out_net = self.init_out_net(model_out_blocks)
 
     def block(self, ch_in, ch_out=None, out_bn_relu=True):
@@ -109,16 +118,20 @@ class FeedForward(nn.Module):
         """
         assert n_blocks >= 1
 
+        chs = 4 * self.chs
+        if self.cross:
+            chs = 2 * self.chs
+
         blocks = []
         # add first blocks
         for _ in range(n_blocks - 1):
-            blocks.append(self.block(self.chs * 2))
+            blocks.append(self.block(chs))
 
-        blocks.append(self.block(self.chs * 2, 1, False))
+        blocks.append(self.block(chs, 1, False))
 
         return nn.Sequential(*blocks)
 
-    def forward(self, h_views, v_views):
+    def forward(self, h_views, v_views, i_views=None, d_views=None):
         """
         Forward network in an end-to-end fashion
 
@@ -128,6 +141,12 @@ class FeedForward(nn.Module):
         :param v_views: vertical view stack
         :type v_views: torch.Tensor of shape (b, n, 3, h, w)
 
+        :param i_views: increasing diagonal view stack
+        :type i_views: torch.Tensor of shape (b, n, 3, h, w)
+
+        :param d_views: decreasing diagonal view stack
+        :type d_views: torch.Tensor of shape (b, n, 3, h, w)
+
         :returns: disparity
         """
         # reshape input to combine view and color dimension
@@ -136,19 +155,45 @@ class FeedForward(nn.Module):
         h_views = h_views.view(b, n * c, h, w)
         v_views = v_views.view(b, n * c, h, w)
 
+        if not self.cross:
+            i_views = i_views.view(b, n * c, h, w)
+            d_views = d_views.view(b, n * c, h, w)
+
         # extract features
         # swap dimensions of horizontal stack
         h_views = h_views.permute(0, 1, 3, 2)
 
-        h_features = self.in_net(h_views)
+        h_features = self.in_net_hv(h_views)
 
         # again swap image dimensions to concatenate with vertical EPI
         h_features = h_features.permute(0, 1, 3, 2)
 
-        v_features = self.in_net(v_views)
+        v_features = self.in_net_hv(v_views)
+
+        i_features, d_features = None, None
+        if not self.cross:
+            # same for diagonals
+            i_views = i_views.permute(0, 1, 3, 2)
+
+            # additionally flip x-axis
+            i_views = torch.flip(i_views, (-1,))
+
+            i_features = self.in_net_id(i_views)
+
+            i_features = torch.flip(i_features, (-1,))
+            i_features = i_features.permute(0, 1, 3, 2)
+
+            d_features = self.in_net_id(d_views)
 
         # concatenate features and compute disparity
-        features = torch.cat([h_features, v_features], 1)
+        features = None
+
+        if self.cross:
+            features = torch.cat([h_features, v_features], 1)
+        else:
+            features = torch.cat(
+                [h_features, v_features, i_features, d_features], 1)
+
         disp = self.out_net(features).squeeze(1)
 
         return disp

@@ -18,6 +18,7 @@ import click
 @click.option('--model_out_blocks', default=8, help='Number of blocks for output network')
 @click.option('--model_chs', default=70, help='Number of channels for input network')
 @click.option('--model_views', default=9, help='Number of viewpoints of the input light field, e.g. 9 for 9+8 views')
+@click.option('--model_cross', is_flag=True, help='Only use cross input?')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
 @click.option('--train_lr', default=1e-5, help='Learning rate')
@@ -79,20 +80,21 @@ def main(output_dir, **kwargs):
         print(header)
         print(header, file=log)
 
-    # model saver
     model_saver = ModelSaver(only_best=True)
     while True:
         for data in trainloader:
             # train
-            h_views, v_views, center, gt, index = data
+            h_views, v_views, i_views, d_views, center, gt, index = data
             h_views = h_views.cuda()
             v_views = v_views.cuda()
+            i_views = i_views.cuda()
+            d_views = d_views.cuda()
             gt = gt.cuda()
 
             model.train()
             optimizer.zero_grad()
 
-            disp = model(h_views, v_views)
+            disp = model(h_views, v_views, i_views, d_views)
 
             loss_train = loss_fn(disp, gt)
 
@@ -106,12 +108,14 @@ def main(output_dir, **kwargs):
 
                     loss_val_avg = 0.0
                     for j, data in enumerate(valloader):
-                        h_views, v_views, center, gt, index = data
+                        h_views, v_views, i_views, d_views, center, gt, index = data
                         h_views = h_views.cuda()
                         v_views = v_views.cuda()
+                        i_views = i_views.cuda()
+                        d_views = d_views.cuda()
                         gt = gt.cuda()
 
-                        disp = model(h_views, v_views)
+                        disp = model(h_views, v_views, i_views, d_views)
                         loss_val = loss_fn(disp, gt)
                         loss_val_avg += loss_val.item()
 

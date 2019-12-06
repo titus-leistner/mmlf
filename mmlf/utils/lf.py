@@ -3,7 +3,7 @@ import os
 from . import dl
 
 
-def save_views(scene_dir, h_views, v_views):
+def save_views(scene_dir, h_views, v_views, i_views=None, d_views=None):
     """
     Save all views of two view stacks to a given scene directory
 
@@ -15,6 +15,12 @@ def save_views(scene_dir, h_views, v_views):
 
     :param v_views: the vertical view stack
     :type v_views: numpy.ndarray of shape (n, h, w)
+
+    :param i_views: the increasing diagonal view stack
+    :type i_views: numpy.ndarray of shape (n, h, w)
+
+    :param d_views: the decreasing diagonal view stack
+    :type d_views: numpy.ndarray of shape (n, h, w)
     """
     # remove batch dimension if necessary
     if len(h_views.shape) == 5:
@@ -35,3 +41,13 @@ def save_views(scene_dir, h_views, v_views):
     for j in range(v_views.shape[0]):
         dl.save_img(os.path.join(
             scene_dir, f'view_v_{j}.png'), v_views[j])
+
+    if i_views is not None:
+        for j in range(i_views.shape[0]):
+            dl.save_img(os.path.join(
+                scene_dir, f'view_i_{j}.png'), i_views[j])
+
+    if d_views is not None:
+        for j in range(d_views.shape[0]):
+            dl.save_img(os.path.join(
+                scene_dir, f'view_d_{j}.png'), d_views[j])
