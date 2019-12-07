@@ -32,7 +32,7 @@ class MaskedL1Loss(nn.Module):
 
     def forward(self, input, target, mask):
         diff = torch.abs(torch.flatten(input) - torch.flatten(target))
-        count = mask.sum()
+        count = mask.int().sum()
         diff *= torch.flatten(mask).float()
 
         return diff.sum() / count
@@ -47,7 +47,7 @@ class MaskedMSELoss(nn.Module):
 
     def forward(self, input, target, mask):
         diff = (torch.flatten(input) - torch.flatten(target)) ** 2.0
-        count = mask.sum()
+        count = mask.int().sum()
         diff *= torch.flatten(mask).float()
 
         return diff.sum() / count
@@ -67,8 +67,11 @@ class MaskedBadPix(nn.Module):
         self.t = t
 
     def forward(self, input, target, mask):
+        return 0.0
+
+        # TODO: implement for taurus
         diff = torch.abs(torch.flatten(input) - torch.flatten(target)) > self.t
-        count = mask.sum()
+        count = mask.int().sum()
         diff &= torch.flatten(mask)
 
         return diff.sum().float() / count

@@ -6,6 +6,7 @@ from ..model.feed_forward import FeedForward
 from ..utils.dl import ModelSaver
 from ..model import loss
 
+import numpy as np
 import torch
 from torchvision import transforms
 import click
@@ -22,6 +23,7 @@ import click
 @click.option('--model_uncert', is_flag=True, help='Use uncertainty model?')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
+@click.option('--train_num_workers', default=4, help='Number of workors for data loader')
 @click.option('--train_lr', default=1e-5, help='Learning rate')
 @click.option('--train_bs', default=1, help='Batch size')
 @click.option('--train_ps', default=32, help='Size of training patches')
@@ -47,9 +49,10 @@ def main(output_dir, **kwargs):
         kwargs['train_trainset'], transform=transform, cache=True)
     trainloader = torch.utils.data.DataLoader(trainset,
                                               batch_size=kwargs['train_bs'],
-                                              shuffle=True, num_workers=4)
+                                              shuffle=True,
+                                              num_workers=kwargs['train_num_workers'])
 
-    valset = hci4d.HCI4D(kwargs['train_valset'])
+    valset = hci4d.HCI4D(kwargs['train_valset'], cache=True)
     valloader = torch.utils.data.DataLoader(valset,
                                             batch_size=1,
                                             shuffle=False, num_workers=1)
@@ -99,12 +102,12 @@ def main(output_dir, **kwargs):
             i_views = i_views.cuda()
             d_views = d_views.cuda()
             gt = gt.cuda()
-            mask = mask.cuda()
 
             if not kwargs['model_uncert']:
+                mask = mask.numpy()
                 # add margin to mask
                 mask &= loss.create_mask(
-                    gt.shape, kwargs['train_loss_margin']).cuda()
+                    gt.shape, kwargs['train_loss_margin']).numpy()
 
                 # no loss if no texture
                 if kwargs['train_mae_threshold'] > 0.0:
@@ -114,8 +117,10 @@ def main(output_dir, **kwargs):
                                         pix_center:pix_center+1]).mean((-1, -2,
                                                                         -3))
                     mean_l1 = (mean_l1 >= kwargs['train_mae_threshold']).view(
-                        (-1, 1, 1)).cuda()
-                    mask &= mean_l1
+                        (-1, 1, 1))
+                    mask &= mean_l1.numpy().astype(np.bool)
+
+                mask = torch.from_numpy(mask).cuda()
 
             model.train()
             optimizer.zero_grad()
