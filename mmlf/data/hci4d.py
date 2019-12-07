@@ -278,6 +278,13 @@ class HCI4D(Dataset):
                     scene_dir, 'result.png'), res_img)
 
             if uncert is not None:
+                # save uncertainty as pfm
+                uncert_out = np.flip(uncert[arr_i].copy(), 0)
+                pfm.save(os.path.join(scene_dir, 'uncert.pfm'), uncert_out)
+                pfm.save(os.path.join(
+                    disp_maps, f'{scene}_uncert.pfm'), uncert_out)
+
+                # and as png
                 dl.save_img(os.path.join(
                     scene_dir, 'uncert.png'), uncert[arr_i])
 

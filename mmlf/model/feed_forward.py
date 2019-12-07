@@ -13,7 +13,8 @@ class FeedForward(nn.Module):
     """
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
-                 model_chs, model_views, model_cross, **kwargs):
+                 model_chs, model_views, model_cross, model_uncert,
+                 **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -30,8 +31,11 @@ class FeedForward(nn.Module):
         :param model_views: number of light field views
         :type model_views: int
 
-        :param cross: only cross setup?
-        :type cross: bool
+        :param model_cross: only cross setup?
+        :type model_cross: bool
+
+        :param model_uncert: Add a second uncert output?
+        :type model_uncert: bool
         """
         super(FeedForward, self).__init__()
 
@@ -39,6 +43,7 @@ class FeedForward(nn.Module):
         self.chs = model_chs
         self.views = model_views
         self.cross = model_cross
+        self.uncert = model_uncert
 
         if model_ksize % 2 == 1:
             self.padding1 = model_ksize // 2
@@ -126,7 +131,11 @@ class FeedForward(nn.Module):
         for _ in range(n_blocks - 1):
             blocks.append(self.block(chs))
 
-        blocks.append(self.block(chs, 1, False))
+        out_chs = 1
+        if self.uncert:
+            out_chs = 2
+
+        blocks.append(self.block(chs, out_chs, False))
 
         return nn.Sequential(*blocks)
 
@@ -193,6 +202,11 @@ class FeedForward(nn.Module):
             features = torch.cat(
                 [h_features, v_features, i_features, d_features], 1)
 
-        disp = self.out_net(features).squeeze(1)
+        disp = self.out_net(features)[:, 0]
 
-        return disp
+        uncert = None
+
+        if self.uncert:
+            uncert = self.out_net(features)[:, 1]
+
+        return disp, uncert

@@ -72,3 +72,23 @@ class MaskedBadPix(nn.Module):
         diff &= torch.flatten(mask)
 
         return diff.sum().float() / count
+
+
+class UncertaintyLoss(nn.Module):
+    """
+    Apply uncertainty loss function by Kendall and Gal
+    """
+    def __init__(self):
+        super(UncertaintyLoss, self).__init__()
+
+    def forward(self, input, target, uncertainty):
+        # compute loss with uncertainty
+        loss = 0.5 * torch.exp(-uncertainty) * torch.pow(input - target, 2.0)
+
+        # add uncertainty
+        loss += 0.5 * uncertainty
+
+        # mean
+        loss = torch.mean(loss)
+
+        return loss

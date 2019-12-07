@@ -19,6 +19,7 @@ import click
 @click.option('--model_chs', default=70, help='Number of channels for input network')
 @click.option('--model_views', default=9, help='Number of viewpoints of the input light field, e.g. 9 for 9+8 views')
 @click.option('--model_cross', is_flag=True, help='Only use cross input?')
+@click.option('--model_uncert', is_flag=True, help='Use uncertainty model?')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
 @click.option('--train_lr', default=1e-5, help='Learning rate')
@@ -57,6 +58,7 @@ def main(output_dir, **kwargs):
     model = FeedForward(**kwargs).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=kwargs['train_lr'])
     loss_fn = loss.MaskedL1Loss()
+    loss_uncert_fn = loss.UncertaintyLoss()
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
 
@@ -99,27 +101,31 @@ def main(output_dir, **kwargs):
             gt = gt.cuda()
             mask = mask.cuda()
 
-            # add margin to mask
-            mask &= loss.create_mask(
-                gt.shape, kwargs['train_loss_margin']).cuda()
+            if not kwargs['model_uncert']:
+                # add margin to mask
+                mask &= loss.create_mask(
+                    gt.shape, kwargs['train_loss_margin']).cuda()
 
-            # no loss if no texture
-            if kwargs['train_mae_threshold'] > 0.0:
-                pix_center = kwargs['train_ps'] // 2
-                mean_l1 = torch.abs(
-                    center - center[..., pix_center:pix_center+1,
-                                    pix_center:pix_center+1]).mean((-1, -2,
-                                                                    -3))
-                mean_l1 = (mean_l1 >= kwargs['train_mae_threshold']).view(
-                    (-1, 1, 1)).cuda()
-                mask &= mean_l1
+                # no loss if no texture
+                if kwargs['train_mae_threshold'] > 0.0:
+                    pix_center = kwargs['train_ps'] // 2
+                    mean_l1 = torch.abs(
+                        center - center[..., pix_center:pix_center+1,
+                                        pix_center:pix_center+1]).mean((-1, -2,
+                                                                        -3))
+                    mean_l1 = (mean_l1 >= kwargs['train_mae_threshold']).view(
+                        (-1, 1, 1)).cuda()
+                    mask &= mean_l1
 
             model.train()
             optimizer.zero_grad()
 
-            disp = model(h_views, v_views, i_views, d_views)
+            disp, uncert = model(h_views, v_views, i_views, d_views)
 
-            loss_train = loss_fn(disp, gt, mask)
+            if not kwargs['model_uncert']:
+                loss_train = loss_fn(disp, gt, mask)
+            else:
+                loss_train = loss_uncert_fn(disp, gt, uncert)
 
             loss_train.backward()
             optimizer.step()
@@ -142,8 +148,14 @@ def main(output_dir, **kwargs):
                         mask = loss.create_mask(
                             gt.shape, kwargs['train_loss_margin']).cuda()
 
-                        disp = model(h_views, v_views, i_views, d_views)
-                        loss_val = loss_fn(disp, gt, mask)
+                        disp, uncert = model(
+                            h_views, v_views, i_views, d_views)
+
+                        if not kwargs['model_uncert']:
+                            loss_val = loss_fn(disp, gt, mask)
+                        else:
+                            loss_val = loss_uncert_fn(disp, gt, uncert)
+
                         loss_val_avg += loss_val.item()
 
                         mse = mse_fn(disp, gt, mask)
@@ -153,8 +165,12 @@ def main(output_dir, **kwargs):
                         bad_pix_avg += bad_pix
 
                         # save results
-                        valset.save_batch(
-                            output_dir, index.numpy(), disp.cpu().numpy())
+                        if uncert is not None:
+                            uncert = uncert.cpu().numpy()
+                        disp = disp.cpu().numpy()
+
+                        valset.save_batch(output_dir, index.numpy(
+                        ), disp, uncert)
                         if j == 3:
                             break
 
