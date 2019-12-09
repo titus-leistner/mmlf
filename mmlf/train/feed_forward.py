@@ -32,6 +32,11 @@ import click
 @click.option('--val_interval', default=1000, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 def main(output_dir, **kwargs):
+    # compute radius
+    kwargs['model_radius'] = (kwargs['model_in_blocks'] +
+                              kwargs['model_out_blocks']) * \
+        ((kwargs['model_ksize'] + 1) // 2)
+
     # initialize transforms
     transform = transforms.Compose([
         hci4d.RandomDownSampling(),
@@ -92,7 +97,9 @@ def main(output_dir, **kwargs):
         print(header)
         print(header, file=log)
 
+    # model saver
     model_saver = ModelSaver(only_best=True)
+
     while True:
         for data in trainloader:
             # train
@@ -105,12 +112,12 @@ def main(output_dir, **kwargs):
 
             if not kwargs['model_uncert']:
                 # no loss if no texture
-                wsize = (kwargs['model_in_blocks'] + kwargs['model_out_blocks']
-                         ) * ((kwargs['model_ksize'] + 1) // 2) * 2 + 1
-                mask = loss.create_mask_texture(
-                    center, wsize, kwargs['train_mae_threshold']).numpy()
+                mask = mask.int() * loss.create_mask_texture(
+                    center, kwargs['model_radius'] * 2 + 1,
+                    kwargs['train_mae_threshold']).int()
 
-                mask = torch.from_numpy(mask).cuda()
+                mask = mask.bool()
+            mask = mask.cuda()
 
             model.train()
             optimizer.zero_grad()

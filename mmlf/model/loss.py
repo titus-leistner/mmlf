@@ -52,9 +52,9 @@ def create_mask_texture(center, wsize, threshold):
 
     # apply the threshold
     mask = mask >= threshold
-    
+
     # also mask the boundary
-    mask &= create_mask_margin(mask.shape, wsize//2)
+    mask = (mask.int() * create_mask_margin(mask.shape, wsize//2).int()).bool()
 
     return mask
 
@@ -103,12 +103,10 @@ class MaskedBadPix(nn.Module):
         self.t = t
 
     def forward(self, input, target, mask):
-        return 0.0
-
-        # TODO: implement for taurus
         diff = torch.abs(torch.flatten(input) - torch.flatten(target)) > self.t
         count = mask.int().sum()
-        diff &= torch.flatten(mask)
+
+        diff = diff.int() * torch.flatten(mask).int()
 
         return diff.sum().float() / count
 
