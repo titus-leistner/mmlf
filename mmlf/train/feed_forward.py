@@ -27,10 +27,10 @@ import click
 @click.option('--train_lr', default=1e-5, help='Learning rate')
 @click.option('--train_bs', default=1, help='Batch size')
 @click.option('--train_ps', default=32, help='Size of training patches')
-@click.option('--train_loss_margin', default=0, help='Margin where no loss gets computed')
 @click.option('--train_mae_threshold', default=0.02, help='If the MAE of one patch is under this threshold, no loss is applied')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
 @click.option('--val_interval', default=1000, help='Validation interval')
+@click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 def main(output_dir, **kwargs):
     # initialize transforms
     transform = transforms.Compose([
@@ -61,7 +61,7 @@ def main(output_dir, **kwargs):
     model = FeedForward(**kwargs).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=kwargs['train_lr'])
     loss_fn = loss.MaskedL1Loss()
-    loss_uncert_fn = loss.UncertaintyLoss()
+    loss_uncert_fn = loss.UncertaintyMSELoss()
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
 
@@ -104,21 +104,11 @@ def main(output_dir, **kwargs):
             gt = gt.cuda()
 
             if not kwargs['model_uncert']:
-                mask = mask.numpy()
-                # add margin to mask
-                mask &= loss.create_mask(
-                    gt.shape, kwargs['train_loss_margin']).numpy()
-
                 # no loss if no texture
-                if kwargs['train_mae_threshold'] > 0.0:
-                    pix_center = kwargs['train_ps'] // 2
-                    mean_l1 = torch.abs(
-                        center - center[..., pix_center:pix_center+1,
-                                        pix_center:pix_center+1]).mean((-1, -2,
-                                                                        -3))
-                    mean_l1 = (mean_l1 >= kwargs['train_mae_threshold']).view(
-                        (-1, 1, 1))
-                    mask &= mean_l1.numpy().astype(np.bool)
+                wsize = (kwargs['model_in_blocks'] + kwargs['model_out_blocks']
+                         ) * ((kwargs['model_ksize'] + 1) // 2) * 2 + 1
+                mask = loss.create_mask_texture(
+                    center, wsize, kwargs['train_mae_threshold']).numpy()
 
                 mask = torch.from_numpy(mask).cuda()
 
@@ -150,8 +140,8 @@ def main(output_dir, **kwargs):
                         i_views = i_views.cuda()
                         d_views = d_views.cuda()
                         gt = gt.cuda()
-                        mask = loss.create_mask(
-                            gt.shape, kwargs['train_loss_margin']).cuda()
+                        mask = loss.create_mask_margin(
+                            gt.shape, kwargs['val_loss_margin']).cuda()
 
                         disp, uncert = model(
                             h_views, v_views, i_views, d_views)
