@@ -6,7 +6,6 @@ from ..model.feed_forward import FeedForward
 from ..utils.dl import ModelSaver
 from ..model import loss
 
-import numpy as np
 import torch
 from torchvision import transforms
 import click
@@ -51,7 +50,7 @@ def main(output_dir, **kwargs):
 
     # load datasets
     trainset = hci4d.HCI4D(
-        kwargs['train_trainset'], transform=transform, cache=True)
+        kwargs['train_trainset'], transform=transform, cache=True, length=4096)
     trainloader = torch.utils.data.DataLoader(trainset,
                                               batch_size=kwargs['train_bs'],
                                               shuffle=True,
@@ -173,8 +172,6 @@ def main(output_dir, **kwargs):
 
                         valset.save_batch(output_dir, index.numpy(
                         ), disp, uncert)
-                        if j == 3:
-                            break
 
                     j += 1
                     loss_val_avg /= j

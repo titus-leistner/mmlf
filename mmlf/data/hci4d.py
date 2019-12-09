@@ -171,8 +171,6 @@ class HCI4D(Dataset):
             self.data.append(self.load_scene(i))
 
     def __len__(self):
-        # TODO: dirty hack to create bigger batches after augmentation
-        return 4096
         if self.length == 0:
             return len(self.scenes)
 
