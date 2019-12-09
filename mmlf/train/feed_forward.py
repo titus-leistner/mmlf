@@ -90,10 +90,10 @@ def main(output_dir, **kwargs):
     mode = 'a' if kwargs['train_resume'] else 'w'
     log = open(os.path.join(output_dir, 'log.csv'), mode)
 
+    # output header
+    header = f'{"iter":>7}, loss_train,   loss_val,        mse, badpix_007'
+    print(header)
     if not kwargs['train_resume']:
-        # output header
-        header = f'{"iter":>7}, loss_train,   loss_val,        mse, badpix_007'
-        print(header)
         print(header, file=log)
 
     # model saver
@@ -115,7 +115,7 @@ def main(output_dir, **kwargs):
                     center, kwargs['model_radius'] * 2 + 1,
                     kwargs['train_mae_threshold']).int()
 
-                mask = mask.bool()
+                mask = mask
             mask = mask.cuda()
 
             model.train()

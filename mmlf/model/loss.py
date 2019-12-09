@@ -54,7 +54,7 @@ def create_mask_texture(center, wsize, threshold):
     mask = mask >= threshold
 
     # also mask the boundary
-    mask = (mask.int() * create_mask_margin(mask.shape, wsize//2).int()).bool()
+    mask = (mask.int() * create_mask_margin(mask.shape, wsize//2).int())
 
     return mask
 
