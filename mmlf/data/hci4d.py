@@ -158,7 +158,7 @@ class HCI4D(Dataset):
         if not os.path.exists(fname):
             mask = np.ones_like(gt, dtype=np.bool)
         else:
-            mask = skimage.io.imread(fname)[:, :, 0] > 0
+            mask = skimage.img_as_int(skimage.io.imread(fname))[:, :, 0] > 0
 
         return h_views, v_views, i_views, d_views, center, gt, mask, index
 
