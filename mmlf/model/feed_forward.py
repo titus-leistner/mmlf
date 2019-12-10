@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from .unet import UNet
+
 
 class FeedForward(nn.Module):
     """
@@ -13,7 +15,7 @@ class FeedForward(nn.Module):
     """
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
-                 model_chs, model_views, model_cross, model_uncert,
+                 model_chs, model_views, model_cross, model_uncert, model_unet,
                  **kwargs):
         """
         :param model_ksize: kernel size
@@ -36,6 +38,9 @@ class FeedForward(nn.Module):
 
         :param model_uncert: Add a second uncert output?
         :type model_uncert: bool
+
+        :param model_unet: Use a U-Net instead of fully convolutional out net?
+        :type model_unet: bool
         """
         super(FeedForward, self).__init__()
 
@@ -58,8 +63,10 @@ class FeedForward(nn.Module):
 
         if not model_cross:
             self.in_net_id = self.init_in_net(model_in_blocks)
-
-        self.out_net = self.init_out_net(model_out_blocks)
+        if model_unet:
+            self.out_net = self.init_unet()
+        else:
+            self.out_net = self.init_out_net(model_out_blocks)
 
     def block(self, ch_in, ch_out=None, out_bn_relu=True):
         """
@@ -138,6 +145,23 @@ class FeedForward(nn.Module):
         blocks.append(self.block(chs, out_chs, False))
 
         return nn.Sequential(*blocks)
+
+    def init_unet(self, depth=5):
+        """
+        Create second part of network as a U-Net architecture
+
+        :param depth: recursive depth of U-Net
+        :type depth: int
+        """
+        chs = 4 * self.chs
+        if self.cross:
+            chs = 2 * self.chs
+
+        out_chs = 1
+        if self.uncert:
+            out_chs = 2
+
+        return UNet(chs, out_chs, depth, padding=True, batch_norm=True)
 
     def forward(self, h_views, v_views, i_views=None, d_views=None):
         """

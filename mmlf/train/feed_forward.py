@@ -20,6 +20,7 @@ import click
 @click.option('--model_views', default=9, help='Number of viewpoints of the input light field, e.g. 9 for 9+8 views')
 @click.option('--model_cross', is_flag=True, help='Only use cross input?')
 @click.option('--model_uncert', is_flag=True, help='Use uncertainty model?')
+@click.option('--model_unet', is_flag=True, help='Use a U-Net after the multistream network?')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
 @click.option('--train_num_workers', default=4, help='Number of workors for data loader')
@@ -27,6 +28,7 @@ import click
 @click.option('--train_bs', default=1, help='Batch size')
 @click.option('--train_ps', default=32, help='Size of training patches')
 @click.option('--train_mae_threshold', default=0.02, help='If the MAE of one patch is under this threshold, no loss is applied')
+@click.option('--train_max_downscale', default=4, help='Maximum factor of down scaling for data augmentation')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
 @click.option('--val_interval', default=1000, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
@@ -38,7 +40,7 @@ def main(output_dir, **kwargs):
 
     # initialize transforms
     transform = transforms.Compose([
-        hci4d.RandomDownSampling(),
+        hci4d.RandomDownSampling(kwargs['train_max_downscale']),
         hci4d.RandomShift(2),
         hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
         hci4d.CenterCrop(kwargs['train_ps']),
