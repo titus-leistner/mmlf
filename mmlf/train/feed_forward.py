@@ -63,7 +63,7 @@ def main(output_dir, **kwargs):
 
     # init model, optimizer and train iteration
     model = FeedForward(**kwargs).cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=kwargs['train_lr'])
+    optimizer = torch.optim.RMSprop(model.parameters(), lr=kwargs['train_lr'])
     loss_fn = loss.MaskedL1Loss()
     loss_uncert_fn = loss.UncertaintyMSELoss()
     mse_fn = loss.MaskedMSELoss()
@@ -115,7 +115,6 @@ def main(output_dir, **kwargs):
                     center, kwargs['model_radius'] * 2 + 1,
                     kwargs['train_mae_threshold']).int()
 
-                mask = mask
             mask = mask.cuda()
 
             model.train()
