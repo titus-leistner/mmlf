@@ -257,7 +257,10 @@ class HCI4D(Dataset):
             dl.save_img(os.path.join(scene_dir, 'center.png'), center)
             dl.save_img(os.path.join(scene_dir, 'gt.png'), gt)
 
-            # save results, uncertainties and/or runtimes
+            # save ground truth, results, uncertainties and/or runtimes
+            gt_out = np.flip(gt.copy(), 0)
+            pfm.save(os.path.join(scene_dir, 'gt.pfm'), gt_out)
+
             if result is not None:
                 # save result as pfm
                 res_out = np.flip(result[arr_i].copy(), 0)
@@ -279,8 +282,8 @@ class HCI4D(Dataset):
                 # save uncertainty as pfm
                 uncert_out = np.flip(uncert[arr_i].copy(), 0)
                 pfm.save(os.path.join(scene_dir, 'uncert.pfm'), uncert_out)
-                pfm.save(os.path.join(
-                    disp_maps, f'{scene}_uncert.pfm'), uncert_out)
+                # pfm.save(os.path.join(
+                #     disp_maps, f'{scene}_uncert.pfm'), uncert_out)
 
                 # and as png
                 dl.save_img(os.path.join(
