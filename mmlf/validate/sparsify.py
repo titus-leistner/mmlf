@@ -8,7 +8,7 @@ import numpy as np
 from ..utils import pfm
 
 
-def masked_mse100(input, target, mask):
+def masked_mse(input, target, mask):
     """
     Computed MSE loss only for pixels which are True in mask
 
@@ -48,7 +48,7 @@ def auc(curve, step):
 @click.argument('output_dir', type=click.Path(exists=True))
 @click.option('--step', default=0.01, help='Step size for sparsification.')
 def main(output_dir, step):
-    loss_fn = masked_mse100
+    loss_fn = masked_mse
     scenes = [f.path for f in os.scandir(
         os.path.join(output_dir, 'scenes')) if f.is_dir()]
 
@@ -89,7 +89,7 @@ def main(output_dir, step):
             loss[2, i] += loss_uncert
 
     # fill in remaining and normalize
-    loss[1:3] /= len(scenes)
+    loss[1:3] /= np.max(loss[1:3])
 
     loss = loss[:, ::-1]
 
