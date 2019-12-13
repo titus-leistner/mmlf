@@ -113,11 +113,11 @@ def main(output_dir, step, mse):
             loss[1, i] += loss_oracle
             loss[2, i] += loss_uncert
 
-    # fill in remaining and normalize
-    loss[1:3] /= np.max(loss[1:3])
-
     # reverse order
     loss = loss[:, ::-1]
+
+    # fill in remaining and normalize
+    loss[1:3] /= loss[1, 0]
 
     # delete last element (1.0 makes no sense)
     loss = np.delete(loss, -1, axis=1)
