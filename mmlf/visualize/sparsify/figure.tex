@@ -1,0 +1,30 @@
+% EPI Shift
+% Author: Titus Leistner
+\documentclass{standalone}
+
+\usepackage{tikz}
+\usepackage{pgfplots}
+
+\begin{document}
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\linewidth,
+            height=0.67\linewidth,
+            legend cell align={left},
+            grid=major,
+            grid style={densely dotted, gray!50},
+            ylabel=MSE (normalized),
+            xlabel=Fraction of Removed Pixels,
+            ]
+
+            \addplot[mark=none, red, thick] 
+            table[x=frac,y=uncert,col sep=comma] {../../../output/uncert-ff/sparsify.csv}; 
+
+            \addplot[mark=none, red!50, thick, densely dotted]
+            table[x=frac,y=oracle,col sep=comma] {../../../output/uncert-ff/sparsify.csv}; 
+
+            \addlegendentry{Predicted}
+            \addlegendentry{Oracle}
+        \end{axis}
+    \end{tikzpicture}
+\end{document}
