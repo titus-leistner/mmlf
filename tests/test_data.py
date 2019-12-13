@@ -23,16 +23,17 @@ def test_hci4d():
     assert h_shape[0] == 9
     assert h_shape[1] == 3
 
-    center_shape = dataset[0][2].shape
+    center_shape = dataset[0][4].shape
     assert len(center_shape) == 3
     assert center_shape[0] == 3
 
-    gt_shape = dataset[0][3].shape
+    gt_shape = dataset[0][5].shape
     assert len(gt_shape) == 2
 
-    index = dataset[0][4]
+    mask_shape = dataset[0][6].shape
+    assert len(mask_shape) == 2
+
+    index = dataset[0][7]
     assert len(index.shape) == 1
     assert index.shape[0] == 1
     assert index[0] == 0
-
-    print(index)
