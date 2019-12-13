@@ -8,7 +8,7 @@ import numpy as np
 from ..utils import pfm
 
 
-def masked_mse(input, target, mask):
+def masked_mse100(input, target, mask):
     """
     Computed MSE loss only for pixels which are True in mask
 
@@ -24,17 +24,35 @@ def masked_mse(input, target, mask):
     diff = (input - target) ** 2.0
     count = np.sum(mask)
 
-    return np.sum(diff * mask.astype(np.float)) / count
+    return np.sum(diff * mask.astype(np.float)) / count * 100.0
+
+
+def auc(curve, step):
+    """
+    Compute area under the curve
+
+    :param curve: 1D list of y values
+    :type curve: list or numpy.ndarray(dtype=numpy.float)
+
+    :param step: step size in x-dimension
+    :type step: float
+    """
+    auc = 0.0
+    for i in range(len(curve) - 1):
+        auc += (curve[i] + curve[i+1]) / 2.0 * step
+
+    return auc
 
 
 @click.command()
 @click.argument('output_dir', type=click.Path(exists=True))
 @click.option('--step', default=0.01, help='Step size for sparsification.')
 def main(output_dir, step):
+    loss_fn = masked_mse100
     scenes = [f.path for f in os.scandir(
         os.path.join(output_dir, 'scenes')) if f.is_dir()]
 
-    mse = np.zeros((3, int(1.0 / step) + 1))
+    loss = np.zeros((3, int(1.0 / step) + 1))
     for scene in scenes:
         gt = pfm.load(os.path.join(scene, 'gt.pfm')).flatten()
         result = pfm.load(os.path.join(scene, 'result.pfm')).flatten()
@@ -49,7 +67,7 @@ def main(output_dir, step):
 
         # sparsification
         for i, fract in enumerate(np.arange(0.0, 1.000000001, step)):
-            mse[0, i] = 1.0 - fract
+            loss[0, i] = 1.0 - fract
 
             if i == 0:
                 continue
@@ -64,26 +82,31 @@ def main(output_dir, step):
                 mask_oracle[idx_oracle] = True
                 mask_uncert[idx_uncert] = True
 
-            mse_oracle = masked_mse(result, gt, mask_oracle)
-            mse_uncert = masked_mse(result, gt, mask_uncert)
+            loss_oracle = loss_fn(result, gt, mask_oracle)
+            loss_uncert = loss_fn(result, gt, mask_uncert)
 
-            mse[1, i] += mse_oracle
-            mse[2, i] += mse_uncert
+            loss[1, i] += loss_oracle
+            loss[2, i] += loss_uncert
 
     # fill in remaining and normalize
-    mse[1:3] /= len(scenes)
+    loss[1:3] /= len(scenes)
 
-    mse = mse[:, ::-1]
+    loss = loss[:, ::-1]
 
     with open(os.path.join(output_dir, 'sparsify.csv'), 'w') as f:
         # print and save result
-        header = 'frac, mse_oracle, mse_uncert'
+        header = 'frac,    oracle,    uncert'
         print(header)
         print(header, file=f)
-        for i in range(mse.shape[1]):
-            line = f'{mse[0, i]:.2f}, {mse[1, i]:.8f}, {mse[2, i]:.8f}'
+        for i in range(loss.shape[1]):
+            line = f'{loss[0, i]:.2f}, {loss[1, i]:.8f}, {loss[2, i]:.8f}'
             print(line)
             print(line, file=f)
+
+    print('----------------------------')
+    # compute area under the curve
+    curve = loss[2] - loss[1]
+    print('AUC: ', auc(curve, step))
 
 
 if __name__ == '__main__':
