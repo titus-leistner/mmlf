@@ -3,6 +3,7 @@ import os
 
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
+from ..model.invertible import Invertible
 from ..utils.dl import ModelSaver
 from ..model import loss
 
@@ -21,6 +22,7 @@ import click
 @click.option('--model_cross', is_flag=True, help='Only use cross input?')
 @click.option('--model_uncert', is_flag=True, help='Use uncertainty model?')
 @click.option('--model_unet', is_flag=True, help='Use a U-Net after the multistream network?')
+@click.option('--model_invertible', is_flag=True, help='Use invertible architecture?')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
 @click.option('--train_num_workers', default=4, help='Number of workors for data loader')
@@ -64,7 +66,12 @@ def main(output_dir, **kwargs):
                                             shuffle=False, num_workers=1)
 
     # init model, optimizer and train iteration
-    model = FeedForward(**kwargs).cuda()
+
+    if kwargs['model_invertible']:
+        model = Invertible(**kwargs).cuda()
+    else:
+        model = FeedForward(**kwargs).cuda()
+
     optimizer = torch.optim.RMSprop(model.parameters(), lr=kwargs['train_lr'])
     loss_fn = loss.MaskedL1Loss()
     loss_uncert_fn = loss.UncertaintyMSELoss()
