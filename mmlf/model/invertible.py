@@ -11,7 +11,7 @@ class Invertible(nn.Module):
     """
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
-                 model_views, model_cross, train_ps, **kwargs):
+                 model_views, model_cross, train_ps, train_bs, **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -30,6 +30,9 @@ class Invertible(nn.Module):
 
         :param train_psize: patch size
         :type train_psize: int
+
+        :param train_bsize: batch size
+        :type train_bsize: int
         """
         super(Invertible, self).__init__()
 
@@ -68,16 +71,23 @@ class Invertible(nn.Module):
         self.in_net_i.append(
             Ff.Node(self.in_net_i[-1], TransformItoD, {}, name=f'i_to_d'))
 
-        if model_cross:
-            merge = [self.in_net_h[-1].out0, self.in_net_v[-1].out0]
-        else:
-            merge = [self.in_net_h[-1].out0, self.in_net_v[-1].out0,
-                     self.in_net_i[-1].out0, self.in_net_d[-1].out0]
+        merge = Ff.Node([self.in_net_h[-1].out0, self.in_net_v[-1].out0],
+                        Fm.ConcatChannel, {}, name='merge_hv')
+        self.merge_net = [merge]
+
+        if not model_cross:
+            diag = Ff.Node([self.in_net_i[-1].out0, self.in_net_d[-1].out0],
+                           Fm.ConcatChannel, {}, name='merge_id')
+            self.merge_net.append(diag)
+            merge = Ff.Node([merge.out0, diag.out0],
+                            Fm.ConcatChannel, {}, name='merge_hvid')
+            self.merge_net.append(merge)
 
         self.out_net = self.init_out_net(model_out_blocks, merge)
 
         self.model = Ff.ReversibleGraphNet(
-            self.in_net_h + self.in_net_v + self.in_net_i + self.in_net_d + self.out_net)
+            self.in_net_h + self.in_net_v + self.in_net_i + self.in_net_d +
+            self.merge_net + self.out_net)
 
     def block(self, ch_in, ch_out=None, out_bn_relu=True):
         """
@@ -94,7 +104,6 @@ class Invertible(nn.Module):
 
         :returns: layers of one convolutional block
         """
-        print(ch_in, ch_out)
         if ch_out is None:
             ch_out = ch_in
 
@@ -159,8 +168,12 @@ class Invertible(nn.Module):
             def subnet_constructor(in_chs, out_chs):
                 if in_chs == self.chs1:
                     return subnets1[i]
-                else:
+                elif in_chs == self.chs2:
                     return subnets2[i]
+                else:
+                    raise ValueError(
+                        'Number of input channels in subnet constructor does'
+                        'not match precomputed channels.')
 
             blocks1.append(Ff.Node(blocks1[i-1], Fm.GLOWCouplingBlock, {
                 'subnet_constructor': self.block},
@@ -185,9 +198,7 @@ class Invertible(nn.Module):
         """
         assert n_blocks >= 1
 
-        print(inp)
-
-        blocks = [Ff.Node(inp, Fm.GLOWCouplingBlock, {
+        blocks = [Ff.Node(inp.out0, Fm.GLOWCouplingBlock, {
                           'subnet_constructor': self.block},
                           name=f'out_coupling_0')]
 
@@ -216,7 +227,7 @@ class Invertible(nn.Module):
         :param d_views: decreasing diagonal view stack
         :type d_views: torch.Tensor of shape (b, n, 3, h, w)
 
-        :returns: disparity
+        :returns: per-pixel latent space (zixels)
         """
         # reshape input to combine view and color dimension
         # TODO: do this in training script
@@ -241,12 +252,50 @@ class Invertible(nn.Module):
         return zixels
 
 
+class ZixelWrapper(nn.Module):
+    """
+    Converts the zixel space to disparity and uncertainty
+    """
+
+    def __init__(self, **kwargs):
+        super(ZixelWrapper, self).__init__()
+
+        self.invertible = Invertible(**kwargs)
+
+    def forward(self, h_views, v_views, i_views=None, d_views=None):
+        """
+        Forward network in an end-to-end fashion
+
+        :param h_views: horizontal view stack
+        :type h_views: torch.Tensor of shape (b, n, 3, h, w)
+
+        :param v_views: vertical view stack
+        :type v_views: torch.Tensor of shape (b, n, 3, h, w)
+
+        :param i_views: increasing diagonal view stack
+        :type i_views: torch.Tensor of shape (b, n, 3, h, w)
+
+        :param d_views: decreasing diagonal view stack
+        :type d_views: torch.Tensor of shape (b, n, 3, h, w)
+
+        :returns: disparity, uncertainty
+        """
+        zixels = self.invertible(h_views, v_views, i_views, d_views)
+
+        disp = zixels[:, 0, :, :]
+        uncert = zixels[:, 1, :, :]
+
+        return disp, uncert
+
+
 class TransformHtoV(nn.Module):
     def __init__(self, *args):
         super(TransformHtoV, self).__init__()
 
     def forward(self, x, rev=False):
-        return x[0].permute(0, 1, 3, 2)
+        x = x[0].permute(0, 1, 3, 2)
+
+        return [x]
 
     def jacobian(self, x, rev=False):
         return 1.0
@@ -264,12 +313,12 @@ class TransformItoD(nn.Module):
         if not rev:
             x = torch.flip(x, (-1,))
 
-        return x.permute(0, 1, 3, 2)
+        x = x.permute(0, 1, 3, 2)
 
         if rev:
             x = torch.flip(x, (-1,))
 
-        return x
+        return [x]
 
     def jacobian(self, x, rev=False):
         return 1.0

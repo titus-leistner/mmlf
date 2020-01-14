@@ -3,7 +3,7 @@ import os
 
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
-from ..model.invertible import Invertible
+from ..model.invertible import ZixelWrapper
 from ..utils.dl import ModelSaver
 from ..model import loss
 
@@ -66,9 +66,8 @@ def main(output_dir, **kwargs):
                                             shuffle=False, num_workers=1)
 
     # init model, optimizer and train iteration
-
     if kwargs['model_invertible']:
-        model = Invertible(**kwargs).cuda()
+        model = ZixelWrapper(**kwargs).cuda()
     else:
         model = FeedForward(**kwargs).cuda()
 
