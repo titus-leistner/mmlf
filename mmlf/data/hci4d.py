@@ -4,6 +4,7 @@ import numpy as np
 
 import os
 import random
+import math
 import copy
 
 from ..utils import pfm
@@ -761,6 +762,102 @@ class Shift:
             d_views[..., i, :, :, :] = cat(
                 [d_views[..., i, :, -shift:, :],
                  d_views[..., i, :, :-shift, :]], -2)
+
+        # correct ground truth
+        if len(data) > 5:
+            data[5] -= float(self.disp)
+
+        return tuple(data)
+
+
+class ContinuousShift:
+    """
+    Shift the lightfield according to some continuous disparity
+    """
+
+    def __init__(self, disp):
+        """
+        :param disp: disparity that should be zero afterwards
+        :type disp: float
+        """
+        assert isinstance(disp, float)
+        self.disp = disp
+
+    def __call__(self, data):
+        """
+        Shift the lightfield
+
+        :param data: Sequence containing (h_views, v_views, center, gt, index)
+        :type data: tuple
+
+        :returns: the shifted lightfield data
+        """
+        data = list(data)
+        # test if numpy or pytorch
+        cat = np.concatenate
+        if not isinstance(data[0], np.ndarray):
+            from torch import cat as torch_cat
+            cat = torch_cat
+
+        h_views = data[0]
+        v_views = data[1]
+        i_views = data[2]
+        d_views = data[3]
+
+        w = h_views.shape[-4]
+        h = v_views.shape[-4]
+        hw = int(w / 2)
+        hh = int(h / 2)
+
+        for i in range(w):
+            alpha, shift0 = math.modf(self.disp * (i - hw))
+            alpha = abs(alpha)
+            shift1 = shift0 + math.copysign(1.0, shift0)
+            shift0 = int(shift0)
+            shift1 = int(shift1)
+
+            h_views[..., i, :, :, :] = cat(
+                [h_views[..., i, :, :, -shift0:],
+                 h_views[..., i, :, :, :-shift0]], -1) * (1.0 - alpha) + cat(
+                [h_views[..., i, :, :, -shift1:],
+                 h_views[..., i, :, :, :-shift1]], -1) * alpha
+
+            i_views[..., i, :, :, :] = cat(
+                [i_views[..., i, :, :, -shift0:],
+                 i_views[..., i, :, :, :-shift0]], -1) * (1.0 - alpha) + cat(
+                [i_views[..., i, :, :, -shift1:],
+                 i_views[..., i, :, :, :-shift1]], -1) * alpha
+
+            d_views[..., i, :, :, :] = cat(
+                [d_views[..., i, :, :, -shift0:],
+                 d_views[..., i, :, :, :-shift0]], -1) * (1.0 - alpha) + cat(
+                [d_views[..., i, :, :, -shift1:],
+                 d_views[..., i, :, :, :-shift1]], -1) * alpha
+
+        for i in range(h):
+            alpha, shift0 = math.modf(self.disp * (i - hh))
+            alpha = abs(alpha)
+            shift1 = shift0 + math.copysign(1.0, shift0)
+            shift0 = int(shift0)
+            shift1 = int(shift1)
+
+            v_views[..., i, :, :, :] = cat(
+                [v_views[..., i, :, -shift0:, :],
+                 v_views[..., i, :, :-shift0, :]], -2) * (1.0 - alpha) + cat(
+                [v_views[..., i, :, -shift1:, :],
+                 v_views[..., i, :, :-shift1, :]], -2) * alpha
+
+            i_views[..., i, :, :, :] = cat(
+                [i_views[..., i, :, shift0:, :],
+                 i_views[..., i, :, :shift0, :]], -2) * (1.0 - alpha) + cat(
+                [i_views[..., i, :, shift1:, :],
+                 i_views[..., i, :, :shift1, :]], -2) * alpha
+
+            d_views[..., i, :, :, :] = cat(
+                [d_views[..., i, :, -shift0:, :],
+                 d_views[..., i, :, :-shift0, :]], -2) * (1.0 - alpha) + cat(
+                [d_views[..., i, :, -shift1:, :],
+                 d_views[..., i, :, :-shift1, :]], -2) * alpha
 
         # correct ground truth
         if len(data) > 5:
