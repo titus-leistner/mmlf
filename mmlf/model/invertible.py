@@ -248,8 +248,9 @@ class Invertible(nn.Module):
             views.append(d_views)
 
         zixels = self.model(views)
+        jac = self.model.log_jacobian(run_forward=False)
 
-        return zixels
+        return zixels, jac
 
 
 class ZixelWrapper(nn.Module):
@@ -280,7 +281,7 @@ class ZixelWrapper(nn.Module):
 
         :returns: disparity, uncertainty
         """
-        zixels = self.invertible(h_views, v_views, i_views, d_views)
+        zixels, jac = self.invertible(h_views, v_views, i_views, d_views)
 
         disp = zixels[:, 0, :, :]
         uncert = zixels[:, 1, :, :]
