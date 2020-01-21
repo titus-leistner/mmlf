@@ -32,6 +32,7 @@ import click
 @click.option('--train_mae_threshold', default=0.02, help='If the MAE of one patch is under this threshold, no loss is applied')
 @click.option('--train_max_downscale', default=4, help='Maximum factor of down scaling for data augmentation')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
+@click.option('--train_loss_padding', default=None, type=float, help='Margin around ground truth to apply loss')
 @click.option('--val_interval', default=1000, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 def main(output_dir, **kwargs):
@@ -124,6 +125,10 @@ def main(output_dir, **kwargs):
                     kwargs['train_mae_threshold']).int()
 
             mask = mask.cuda()
+
+            if kwargs['train_loss_padding'] is not None:
+                mask = mask.int() * (torch.abs(gt) <
+                                     kwargs['train_loss_padding']).int()
 
             model.train()
             optimizer.zero_grad()
