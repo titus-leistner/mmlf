@@ -700,9 +700,9 @@ class Noise:
         return tuple(data)
 
 
-class Shift:
+class IntegerShift:
     """
-    Shift the lightfield according to some disparity
+    Shift the lightfield according to some integer disparity
     """
 
     def __init__(self, disp):
@@ -770,7 +770,7 @@ class Shift:
         return tuple(data)
 
 
-class ContinuousShift:
+class Shift:
     """
     Shift the lightfield according to some continuous disparity
     """
@@ -875,14 +875,14 @@ class RandomShift:
         """
         :param disp_range: interval of disparities for shifts. tuple(min, max)
         or positive int for a range of (-disp_range, +disp_range)
-        :type disp_range: tuple(int, int) or int
+        :type disp_range: tuple(float, float) or float
         """
-        assert isinstance(disp_range, int) or (
+        assert isinstance(disp_range, float) or (
             isinstance(disp_range, tuple) and len(disp_range) == 2)
 
         self.disp_range = disp_range
 
-        if isinstance(disp_range, int):
+        if not isinstance(disp_range, tuple):
             assert disp_range > 0
             self.disp_range = (-disp_range, disp_range)
 
@@ -896,7 +896,7 @@ class RandomShift:
         :returns: the shifted lightfield data
         """
         # shift randomly
-        disp = random.randint(self.disp_range[0], self.disp_range[1])
+        disp = random.uniform(self.disp_range[0], self.disp_range[1])
 
         shift = Shift(disp)
         data = shift(data)

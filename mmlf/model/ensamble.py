@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ..data.hci4d import ContinuousShift
+from ..data.hci4d import Shift
 
 
 class Ensamble(nn.Module):
@@ -64,7 +64,7 @@ class Ensamble(nn.Module):
                 data = (h_views.clone(), v_views.clone(),
                         i_views.clone(), d_views.clone())
 
-            shift = ContinuousShift(shift_disp)
+            shift = Shift(shift_disp)
             data = shift(data)
 
             disp, uncert = self.model(*data)

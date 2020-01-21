@@ -53,7 +53,7 @@ def main(output_dir, **kwargs):
     # initialize transforms
     transform = transforms.Compose([
         hci4d.RandomDownSampling(kwargs['train_max_downscale']),
-        hci4d.RandomShift(2),
+        hci4d.RandomShift(2.0),
         hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
         hci4d.CenterCrop(kwargs['train_ps']),
         hci4d.RandomRotate(),
