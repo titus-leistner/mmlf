@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .feed_forward import FeedForward
 from ..data.hci4d import ContinuousShift
 
 
@@ -11,7 +10,8 @@ class Ensamble(nn.Module):
     Use an ensamble with weight sharing to infer a per-pixel GMM
     """
 
-    def __init__(self, model, val_disp_min, val_disp_max, val_disp_step):
+    def __init__(self, model, val_disp_min, val_disp_max, val_disp_step,
+                 **kwarg):
         """
         :param model: feed forwar network model
         :type model: mmlf.model.feed_forward.FeedForward
@@ -58,8 +58,6 @@ class Ensamble(nn.Module):
         var = []
         for shift_disp in np.arange(self.disp_min, self.disp_max,
                                     self.disp_step):
-            print(f'Running shift {shift_disp}...')
-
             if i_views is None or d_views is None:
                 data = (h_views.clone(), v_views.clone())
             else:

@@ -4,6 +4,7 @@ import os
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
 from ..model.invertible import ZixelWrapper
+from ..model.ensamble import Ensamble
 from ..utils.dl import ModelSaver
 from ..model import loss
 
@@ -35,11 +36,19 @@ import click
 @click.option('--train_loss_padding', default=None, type=float, help='Margin around ground truth to apply loss')
 @click.option('--val_interval', default=1000, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
+@click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
+@click.option('--val_disp_min', default=-3.5, help='Minimum disparity of dataset')
+@click.option('--val_disp_max', default=3.5, help='Maximum disparity of dataset')
+@click.option('--val_disp_step', default=0.1, help='Disparity increment for ensamble')
 def main(output_dir, **kwargs):
     # compute radius
     kwargs['model_radius'] = (kwargs['model_in_blocks'] +
                               kwargs['model_out_blocks']) * \
         ((kwargs['model_ksize'] + 1) // 2)
+
+    # ensamble implies uncertainty
+    if kwargs['val_ensamble']:
+        kwargs['model_uncert'] = True
 
     # initialize transforms
     transform = transforms.Compose([
@@ -94,6 +103,12 @@ def main(output_dir, **kwargs):
         i = state['iteration']
 
     model = torch.nn.DataParallel(model)
+
+    # create ensamble model
+    if kwargs['val_ensamble']:
+        val_model = Ensamble(model, **kwargs)
+    else:
+        val_model = model
 
     # logging
     mode = 'a' if kwargs['train_resume'] else 'w'
@@ -161,7 +176,7 @@ def main(output_dir, **kwargs):
                         mask = loss.create_mask_margin(
                             gt.shape, kwargs['val_loss_margin']).cuda()
 
-                        disp, uncert = model(
+                        disp, uncert = val_model(
                             h_views, v_views, i_views, d_views)
 
                         if not kwargs['model_uncert']:
