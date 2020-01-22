@@ -7,6 +7,7 @@ from ..model.feed_forward import FeedForward
 from ..model.ensamble import Ensamble
 from ..model import loss
 
+import numpy as np
 import torch
 import click
 
@@ -80,13 +81,24 @@ def main(output_dir, dataset, val_loss_margin, val_ensamble, val_disp_step,
             bad_pix_avg += bad_pix
 
             # save results
+            mean = output['mean'].cpu().numpy()
+
             logvar = output.get('logvar', None)
             if logvar is not None:
                 logvar = logvar.cpu().numpy()
-            mean = output['mean'].cpu().numpy()
+
+            # GMM parameters
+            means = output.get('means', None)
+            logvars = output.get('logvars', None)
+            gmm = None
+            if means is not None and logvars is not None:
+                means = means.cpu().numpy()
+                logvars = np.exp(logvars.cpu().numpy())
+                gmm = np.stack([means, logvars], 0)
 
             runtime = time.time() - t_start
-            valset.save_batch(output_dir, index.numpy(), mean, logvar, runtime)
+            valset.save_batch(output_dir, index.numpy(), mean,
+                              logvar, runtime, gmm)
 
         mse_avg /= i
         bad_pix_avg /= i

@@ -54,8 +54,8 @@ class Ensamble(nn.Module):
 
         :returns: disparity
         """
-        mean = []
-        logvar = []
+        means = []
+        logvars = []
         for shift_disp in np.arange(self.disp_min, self.disp_max,
                                     self.disp_step):
             if i_views is None or d_views is None:
@@ -69,25 +69,26 @@ class Ensamble(nn.Module):
 
             output = self.model(*data)
 
-            mean.append(output['mean'] + shift_disp)
-            logvar.append(output['logvar'])
+            means.append(output['mean'] + shift_disp)
+            logvars.append(output['logvar'])
 
-        mean = torch.stack(mean)
-        logvar = torch.stack(logvar)
+        means = torch.stack(means)
+        logvars = torch.stack(logvars)
 
         # TODO: choose disp and compute uncert
-        min_index = torch.min(logvar, 0)[1]
-        min_index = torch.stack([min_index] * mean.shape[0])
+        min_index = torch.min(logvars, 0)[1]
+        min_index = torch.stack([min_index] * means.shape[0])
 
-        mean = mean.gather(0, min_index)[0]
-        logvar = logvar.gather(0, min_index)[0]
+        mean = means.gather(0, min_index)[0]
+        logvar = logvars.gather(0, min_index)[0]
 
         # compute variance as
         # average variance + average squared mean - square of average mean
-        # var = torch.exp(logvar)
-        # avg_var = torch.mean(var, 0)
-        # avg_sq_mean = torch.mean(mean ** 2.0, 0)
-        # sq_avg_mean = torch.mean(mean, 0) ** 2.0
-        # uncert = avg_var + avg_sq_mean - sq_avg_mean
+        # var = torch.exp(logvars)
+        # avg_var = torch.means(var, 0)
+        # avg_sq_mean = torch.mean(means ** 2.0, 0)
+        # sq_avg_mean = torch.mean(means, 0) ** 2.0
+        # logvar = torch.log(avg_var + avg_sq_mean - sq_avg_mean)
 
-        return {'mean': mean, 'logvar': logvar}
+        return {'mean': mean, 'logvar': logvar,
+                'means': means, 'logvars': logvars}

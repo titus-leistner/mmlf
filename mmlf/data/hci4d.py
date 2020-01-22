@@ -202,7 +202,8 @@ class HCI4D(Dataset):
 
         return data
 
-    def save_batch(self, path, index, result=None, uncert=None, runtime=None):
+    def save_batch(self, path, index, result=None, uncert=None, runtime=None,
+                   gmm=None):
         """
         Save the scene batch, ground truth and result to disk.
         Creates one one subdirectory in 'scenes/' for each scene in the batch.
@@ -223,6 +224,9 @@ class HCI4D(Dataset):
 
         :param runtime: runtime for the batch
         :type runtime: float
+
+        :param gmm: GMM, containing means and vars for the batch
+        :type gmm: np.ndarray of shape (2, K, b, h, w)
         """
         # create directories
         scenes = os.path.join(path, 'scenes')
@@ -289,6 +293,10 @@ class HCI4D(Dataset):
                 # and as png
                 dl.save_img(os.path.join(
                     scene_dir, 'uncert.png'), uncert[arr_i])
+
+            # save GMM
+            if gmm is not None:
+                np.save(os.path.join(scene_dir, 'gmm.npy'), gmm[:, :, arr_i])
 
             # if mask is not None:
             #     dl.save_img(os.path.join(

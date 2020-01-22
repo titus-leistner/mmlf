@@ -1,0 +1,24 @@
+% EPI Shift
+% Author: Titus Leistner
+\documentclass{standalone}
+
+\usepackage{tikz}
+\usepackage{pgfplots}
+
+\begin{document}
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\linewidth,
+            height=0.67\linewidth,
+            legend cell align={left},
+            grid=major,
+            grid style={densely dotted, gray!50},
+            ylabel=$p(y | x)$,
+            xlabel=$y$,
+            ]
+
+            \addplot[mark=none, red, thick] 
+            table[x=x,y=p,col sep=comma] {../../../gmm.csv}; 
+        \end{axis}
+    \end{tikzpicture}
+\end{document}
