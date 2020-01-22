@@ -250,7 +250,7 @@ class Invertible(nn.Module):
         zixels = self.model(views)
         jac = self.model.log_jacobian(run_forward=False)
 
-        return zixels, jac
+        return {'zixels': zixels, 'jac': jac}
 
 
 class ZixelWrapper(nn.Module):
@@ -281,12 +281,15 @@ class ZixelWrapper(nn.Module):
 
         :returns: disparity, uncertainty
         """
-        zixels, jac = self.invertible(h_views, v_views, i_views, d_views)
+        output = self.invertible(h_views, v_views, i_views, d_views)
 
-        disp = zixels[:, 0, :, :]
-        uncert = zixels[:, 1, :, :]
+        mean = output['zixels'][:, 0, :, :]
+        logvar = output['zixels'][:, 1, :, :]
 
-        return disp, uncert
+        output['mean'] = mean
+        output['logvar'] = logvar
+
+        return output
 
 
 class TransformHtoV(nn.Module):

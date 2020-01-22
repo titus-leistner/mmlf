@@ -71,22 +71,22 @@ def main(output_dir, dataset, val_loss_margin, val_ensamble, val_disp_step,
             mask = loss.create_mask_margin(
                 gt.shape, val_loss_margin).cuda()
 
-            disp, uncert = model(
-                h_views, v_views, i_views, d_views)
+            output = model(h_views, v_views, i_views, d_views)
 
-            mse = mse_fn(disp, gt, mask)
+            mse = mse_fn(output, gt, mask)
             mse_avg += mse
 
-            bad_pix = bad_pix_fn(disp, gt, mask)
+            bad_pix = bad_pix_fn(output, gt, mask)
             bad_pix_avg += bad_pix
 
             # save results
-            if uncert is not None:
-                uncert = uncert.cpu().numpy()
-            disp = disp.cpu().numpy()
+            logvar = output.get('logvar', None)
+            if logvar is not None:
+                logvar = logvar.cpu().numpy()
+            mean = output['mean'].cpu().numpy()
 
             runtime = time.time() - t_start
-            valset.save_batch(output_dir, index.numpy(), disp, uncert, runtime)
+            valset.save_batch(output_dir, index.numpy(), mean, logvar, runtime)
 
         mse_avg /= i
         bad_pix_avg /= i

@@ -63,11 +63,12 @@ class MaskedL1Loss(nn.Module):
     """
     Apply L1 loss only to some pixels given by a mask
     """
+
     def __init__(self):
         super(MaskedL1Loss, self).__init__()
 
     def forward(self, input, target, mask):
-        diff = torch.abs(torch.flatten(input) - torch.flatten(target))
+        diff = torch.abs(torch.flatten(input['mean']) - torch.flatten(target))
         count = mask.int().sum()
         diff *= torch.flatten(mask).float()
 
@@ -78,11 +79,12 @@ class MaskedMSELoss(nn.Module):
     """
     Apply MSE loss only to some pixels given by a mask
     """
+
     def __init__(self):
         super(MaskedMSELoss, self).__init__()
 
     def forward(self, input, target, mask):
-        diff = (torch.flatten(input) - torch.flatten(target)) ** 2.0
+        diff = (torch.flatten(input['mean']) - torch.flatten(target)) ** 2.0
         count = mask.int().sum()
         diff *= torch.flatten(mask).float()
 
@@ -93,6 +95,7 @@ class MaskedBadPix(nn.Module):
     """
     Compute BadPix metric only on some pixels given by a mask
     """
+
     def __init__(self, t=0.07):
         """
         :param t: threshold for BadPix computation
@@ -103,7 +106,8 @@ class MaskedBadPix(nn.Module):
         self.t = t
 
     def forward(self, input, target, mask):
-        diff = torch.abs(torch.flatten(input) - torch.flatten(target)) > self.t
+        diff = torch.abs(torch.flatten(
+            input['mean']) - torch.flatten(target)) > self.t
         count = mask.int().sum()
 
         diff = diff.int() * torch.flatten(mask).int()
@@ -115,15 +119,17 @@ class UncertaintyMSELoss(nn.Module):
     """
     Apply an MSE loss with uncertainty introduced by Kendall and Gal
     """
+
     def __init__(self):
         super(UncertaintyMSELoss, self).__init__()
 
-    def forward(self, input, target, uncertainty):
+    def forward(self, input, target, mask):
         # compute loss with uncertainty
-        loss = 0.5 * torch.exp(-uncertainty) * (input - target) ** 2.0
+        loss = 0.5 * torch.exp(-input['logvar']) * \
+            (input['mean'] - target) ** 2.0
 
         # add uncertainty
-        loss += 0.5 * uncertainty
+        loss += 0.5 * input['logvar']
 
         # mean
         loss = torch.mean(loss)
@@ -135,15 +141,17 @@ class UncertaintyL1Loss(nn.Module):
     """
     Apply an L1 loss with uncertainty
     """
+
     def __init__(self):
         super(UncertaintyL1Loss, self).__init__()
 
-    def forward(self, input, target, uncertainty):
+    def forward(self, input, target, mask):
         # compute loss with uncertainty
-        loss = 0.5 * torch.exp(-uncertainty) * torch.abs(input - target)
+        loss = 0.5 * torch.exp(-input['logvar']) * \
+            torch.abs(input['mean'] - target)
 
         # add uncertainty
-        loss += 0.5 * uncertainty
+        loss += 0.5 * input['logvar']
 
         # mean
         loss = torch.mean(loss)

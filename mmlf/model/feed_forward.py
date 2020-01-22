@@ -226,11 +226,11 @@ class FeedForward(nn.Module):
             features = torch.cat(
                 [h_features, v_features, i_features, d_features], 1)
 
-        disp = self.out_net(features)[:, 0]
+        mean = self.out_net(features)[:, 0]
 
-        uncert = None
+        logvar = None
 
         if self.uncert:
-            uncert = self.out_net(features)[:, 1]
+            logvar = self.out_net(features)[:, 1]
 
-        return disp, uncert
+        return {'mean': mean, 'logvar': logvar}

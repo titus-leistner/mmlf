@@ -148,12 +148,14 @@ def main(output_dir, **kwargs):
             model.train()
             optimizer.zero_grad()
 
-            disp, uncert = model(h_views, v_views, i_views, d_views)
+            output = model(h_views, v_views, i_views, d_views)
+            mean = output['mean']
+            logvar = output['logvar']
 
             if not kwargs['model_uncert']:
-                loss_train = loss_fn(disp, gt, mask)
+                loss_train = loss_fn(output, gt, mask)
             else:
-                loss_train = loss_uncert_fn(disp, gt, uncert)
+                loss_train = loss_uncert_fn(output, gt, logvar)
 
             loss_train.backward()
             optimizer.step()
@@ -176,29 +178,29 @@ def main(output_dir, **kwargs):
                         mask = loss.create_mask_margin(
                             gt.shape, kwargs['val_loss_margin']).cuda()
 
-                        disp, uncert = val_model(
-                            h_views, v_views, i_views, d_views)
+                        output = val_model(h_views, v_views, i_views, d_views)
 
                         if not kwargs['model_uncert']:
-                            loss_val = loss_fn(disp, gt, mask)
+                            loss_val = loss_fn(output, gt, mask)
                         else:
-                            loss_val = loss_uncert_fn(disp, gt, uncert)
+                            loss_val = loss_uncert_fn(output, gt, logvar)
 
                         loss_val_avg += loss_val.item()
 
-                        mse = mse_fn(disp, gt, mask)
+                        mse = mse_fn(output, gt, mask)
                         mse_avg += mse
 
-                        bad_pix = bad_pix_fn(disp, gt, mask)
+                        bad_pix = bad_pix_fn(output, gt, mask)
                         bad_pix_avg += bad_pix
 
                         # save results
-                        if uncert is not None:
-                            uncert = uncert.cpu().numpy()
-                        disp = disp.cpu().numpy()
+                        logvar = output.get('logvar', None)
+                        if logvar is not None:
+                            logvar = logvar.cpu().numpy()
+                        mean = output['mean'].cpu().numpy()
 
                         valset.save_batch(output_dir, index.numpy(
-                        ), disp, uncert)
+                        ), mean, logvar)
 
                     j += 1
                     loss_val_avg /= j
