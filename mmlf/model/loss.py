@@ -157,3 +157,43 @@ class UncertaintyL1Loss(nn.Module):
         loss = torch.mean(loss)
 
         return loss
+
+
+class InformationBottleneckLoss(nn.Module):
+    """
+    Apply an L1 loss with uncertainty
+    """
+
+    def __init__(self, beta):
+        """
+        :param beta: loss weights
+        :type beta: float or None for beta = inf
+        """
+        super(InformationBottleneckLoss, self).__init__()
+        self.beta_nll = 1.0 / (1.0 + beta)
+        self.beta_cat_ce = 1.0 * beta / (1.0 + beta)
+
+    def forward(self, input, target, mask):
+
+        zixels = input['zixels']
+        jac = input['jac']
+        mu = input['mu']
+        dists = input['dists']
+
+        w = zixels.shape[-1]
+        h = zixels.shape[-2]
+        dims = mu.shape[-1]
+
+        jac = jac.view(-1, 1, 1) / (dims * w * h)
+
+        nll = ((- torch.logsumexp(- 0.5 * dists, dim=1)) - jac) / dims
+
+        cat_ce = - \
+            torch.sum((torch.log_softmax(- 0.5 * dists, dim=1)) * target,
+                      dim=1)
+        nll = nll.mean()
+        cat_ce = cat_ce.mean()
+
+        loss = self.beta_nll * nll + self.beta_cat_ce * cat_ce
+
+        return loss

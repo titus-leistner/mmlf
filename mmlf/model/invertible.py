@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import FrEIA.framework as Ff
 import FrEIA.modules as Fm
+
+from ..utils.dl import class_to_reg
 
 
 class Invertible(nn.Module):
@@ -11,7 +14,8 @@ class Invertible(nn.Module):
     """
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
-                 model_views, model_cross, train_ps, train_bs, **kwargs):
+                 model_views, model_cross, train_lr, train_ps, train_bs,
+                 **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -28,6 +32,9 @@ class Invertible(nn.Module):
         :param model_cross: only cross setup?
         :type model_cross: bool
 
+        :param train_lr: the learning rate
+        :type train_lr: float
+
         :param train_psize: patch size
         :type train_psize: int
 
@@ -42,6 +49,7 @@ class Invertible(nn.Module):
         self.views = model_views
         self.cross = model_cross
         self.psize = train_ps
+        self.lr = train_lr
 
         if model_ksize % 2 == 1:
             self.padding1 = model_ksize // 2
@@ -88,6 +96,14 @@ class Invertible(nn.Module):
         self.model = Ff.ReversibleGraphNet(
             self.in_net_h + self.in_net_v + self.in_net_i + self.in_net_d +
             self.merge_net + self.out_net)
+
+        # cluster centers
+        dims = 4
+        if model_cross:
+            dims = 2
+
+        dims *= 3 * model_views
+        self.mu = nn.Parameter(torch.randn(1, dims, dims))
 
     def block(self, ch_in, ch_out=None, out_bn_relu=True):
         """
@@ -160,8 +176,10 @@ class Invertible(nn.Module):
         subnets1, subnets2 = self.init_in_net(n_blocks)
 
         # now init the INN sequences with weight sharing
-        blocks1 = [Ff.InputNode(self.views * 3, name='input x_0')]
-        blocks2 = [Ff.InputNode(self.views * 3, name='input x_1')]
+        blocks1 = [Ff.InputNode(
+            self.views * 3, self.psize, self.psize, name='input x_0')]
+        blocks2 = [Ff.InputNode(
+            self.views * 3, self.psize, self.psize, name='input x_1')]
 
         # remaining blocks
         for i in range(n_blocks):
@@ -250,7 +268,7 @@ class Invertible(nn.Module):
         zixels = self.model(views)
         jac = self.model.log_jacobian(run_forward=False)
 
-        return {'zixels': zixels, 'jac': jac}
+        return {'zixels': zixels, 'jac': jac, 'mu': self.mu}
 
 
 class ZixelWrapper(nn.Module):
@@ -258,10 +276,26 @@ class ZixelWrapper(nn.Module):
     Converts the zixel space to disparity and uncertainty
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, val_disp_min, val_disp_max, **kwargs):
         super(ZixelWrapper, self).__init__()
 
         self.invertible = Invertible(**kwargs)
+        self.disp_min = val_disp_min
+        self.disp_max = val_disp_max
+        self.steps = 4
+        if kwargs['model_cross']:
+            self.steps = 2
+        self.steps *= kwargs['model_views'] * 3
+
+    def cluster_distances(zixels, mu):
+        dims = mu.shape[-1]
+        mu = mu.view(1, dims, dims, 1, 1)
+
+        mi_mj = torch.sum(mu ** 2, dim=2)
+        zi_zj = torch.sum(zixels ** 2, dim=1, keepdim=True)
+        zi_mj = F.conv2d(zixels, mu[0])
+
+        return -2.0 * zi_mj + zi_zj + mi_mj
 
     def forward(self, h_views, v_views, i_views=None, d_views=None):
         """
@@ -283,11 +317,13 @@ class ZixelWrapper(nn.Module):
         """
         output = self.invertible(h_views, v_views, i_views, d_views)
 
-        mean = output['zixels'][:, 0, :, :]
-        logvar = output['zixels'][:, 1, :, :]
+        output['dists'] = ZixelWrapper.cluster_distances(
+            output['zixels'], output['mu'])
 
-        output['mean'] = mean
-        output['logvar'] = logvar
+        one_hot = (torch.max(output['dists'], 1, keepdim=True)[
+                   0] == output['dists']).float()
+        output['mean'] = class_to_reg(
+            one_hot, self.disp_min, self.disp_max, self.steps)
 
         return output
 
@@ -302,7 +338,7 @@ class TransformHtoV(nn.Module):
         return [x]
 
     def jacobian(self, x, rev=False):
-        return 1.0
+        return 0.0
 
     def output_dims(self, dim):
         return dim
@@ -325,7 +361,7 @@ class TransformItoD(nn.Module):
         return [x]
 
     def jacobian(self, x, rev=False):
-        return 1.0
+        return 0.0
 
     def output_dims(self, dim):
         return dim

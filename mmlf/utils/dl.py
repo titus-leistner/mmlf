@@ -104,6 +104,54 @@ def save_img(fname, arr):
         skimage.io.imsave(fname, skimage.img_as_ubyte(arr))
 
 
+def reg_to_class(arr, start, stop, n_steps):
+    """
+    Convert tensor of continuous numbers to discrete one-hot-encoding
+
+    :param arr: input tensor/array
+    :type arr: torch.tensor
+
+    :param start: lower bound of valid range
+    :type start: float
+
+    :param stop: upper bound of valid range
+    :type stop: float
+
+    :param: n_steps: number of classes
+    :type: n_steps: int
+    """
+    step = (stop - start) / n_steps
+    result = torch.linspace(start, stop, n_steps).view((1, -1, 1, 1))
+    arr = arr.unsqueeze(1)
+
+    result = (torch.abs(result - arr) < step / 2.0).float()
+
+    return result
+
+
+def class_to_reg(arr, start, stop, n_steps):
+    """
+    Convert tensor of discrete one-hot-encodings to continuous regressions
+
+    :param arr: input tensor/array
+    :type arr: torch.tensor
+
+    :param start: lower bound of valid range
+    :type start: float
+
+    :param stop: upper bound of valid range
+    :type stop: float
+
+    :param: n_steps: number of classes
+    :type: n_steps: int
+    """
+    result = torch.linspace(start, stop, n_steps).view(
+        (1, -1, 1, 1)).to(arr.device)
+    result = torch.sum(result * arr, 1)
+
+    return result
+
+
 class BatchIter:
     """
     Process each image in a batch iteratively

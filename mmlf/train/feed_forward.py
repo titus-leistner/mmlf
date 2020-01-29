@@ -5,7 +5,7 @@ from ..data import hci4d
 from ..model.feed_forward import FeedForward
 from ..model.invertible import ZixelWrapper
 from ..model.ensamble import Ensamble
-from ..utils.dl import ModelSaver
+from ..utils.dl import ModelSaver, reg_to_class, class_to_reg
 from ..model import loss
 
 import torch
@@ -30,6 +30,7 @@ import click
 @click.option('--train_lr', default=1e-5, help='Learning rate')
 @click.option('--train_bs', default=1, help='Batch size')
 @click.option('--train_ps', default=32, help='Size of training patches')
+@click.option('--train_beta', default=1.0, help='Weighting between NLL and Cat CE')
 @click.option('--train_mae_threshold', default=0.02, help='If the MAE of one patch is under this threshold, no loss is applied')
 @click.option('--train_max_downscale', default=4, help='Maximum factor of down scaling for data augmentation')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
@@ -84,6 +85,7 @@ def main(output_dir, **kwargs):
     optimizer = torch.optim.RMSprop(model.parameters(), lr=kwargs['train_lr'])
     loss_fn = loss.MaskedL1Loss()
     loss_uncert_fn = loss.UncertaintyMSELoss()
+    loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
 
@@ -127,11 +129,19 @@ def main(output_dir, **kwargs):
         for data in trainloader:
             # train
             h_views, v_views, i_views, d_views, center, gt, mask, index = data
+            dims = 4
+            if kwargs['model_cross']:
+                dims = 2
+            dims *= kwargs['model_views'] * 3
+            gt_classes = reg_to_class(
+                gt, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
+
             h_views = h_views.cuda()
             v_views = v_views.cuda()
             i_views = i_views.cuda()
             d_views = d_views.cuda()
             gt = gt.cuda()
+            gt_classes = gt_classes.cuda()
 
             if not kwargs['model_uncert']:
                 # no loss if no texture
@@ -149,13 +159,13 @@ def main(output_dir, **kwargs):
             optimizer.zero_grad()
 
             output = model(h_views, v_views, i_views, d_views)
-            mean = output['mean']
-            logvar = output['logvar']
 
-            if not kwargs['model_uncert']:
-                loss_train = loss_fn(output, gt, mask)
+            if kwargs['model_uncert']:
+                loss_train = loss_uncert_fn(output, gt, None)
+            elif kwargs['model_invertible']:
+                loss_train = loss_invertible_fn(output, gt_classes, None)
             else:
-                loss_train = loss_uncert_fn(output, gt, logvar)
+                loss_train = loss_fn(output, gt, mask)
 
             loss_train.backward()
             optimizer.step()
@@ -170,6 +180,7 @@ def main(output_dir, **kwargs):
                     bad_pix_avg = 0.0
                     for j, data in enumerate(valloader):
                         h_views, v_views, i_views, d_views, center, gt, _, index = data
+
                         h_views = h_views.cuda()
                         v_views = v_views.cuda()
                         i_views = i_views.cuda()
@@ -180,10 +191,10 @@ def main(output_dir, **kwargs):
 
                         output = val_model(h_views, v_views, i_views, d_views)
 
-                        if not kwargs['model_uncert']:
-                            loss_val = loss_fn(output, gt, mask)
-                        else:
+                        if kwargs['model_uncert']:
                             loss_val = loss_uncert_fn(output, gt, logvar)
+                        else:
+                            loss_val = loss_fn(output, gt, mask)
 
                         loss_val_avg += loss_val.item()
 
