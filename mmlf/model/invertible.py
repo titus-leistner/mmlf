@@ -6,6 +6,7 @@ import FrEIA.framework as Ff
 import FrEIA.modules as Fm
 
 from ..utils.dl import class_to_reg
+from .coupling_blocks import AIO_HighPerfCouplingBlock
 
 
 class Invertible(nn.Module):
@@ -15,7 +16,8 @@ class Invertible(nn.Module):
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
                  model_views, model_cross, train_lr, train_ps, train_bs,
-                 **kwargs):
+                 model_clamp, model_act_norm, model_act_norm_type,
+                 model_soft_permutation, **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -50,6 +52,10 @@ class Invertible(nn.Module):
         self.cross = model_cross
         self.psize = train_ps
         self.lr = train_lr
+        self.clamp = model_clamp
+        self.act_norm = model_act_norm
+        self.act_norm_type = model_act_norm_type
+        self.soft_permutation = model_soft_permutation
 
         if model_ksize % 2 == 1:
             self.padding1 = model_ksize // 2
@@ -129,9 +135,20 @@ class Invertible(nn.Module):
             nn.Conv2d(ch_out, ch_out, self.ksize, padding=self.padding2),
         ]
 
+        # init layers
+        nn.init.kaiming_normal_(layers[0].weight)
+        nn.init.kaiming_normal_(layers[2].weight)
+
+        layers[0].weight.data *= 0.035
+        layers[2].weight.data *= 0.035
+
         if out_bn_relu:
             layers.append(nn.BatchNorm2d(ch_out))
             layers.append(nn.ReLU())
+
+            # init BatchNorm
+            layers[3].weight.data.fill_(1.0)
+            layers[3].bias.data.zero_()
 
         return nn.Sequential(*layers)
 
@@ -193,12 +210,20 @@ class Invertible(nn.Module):
                         'Number of input channels in subnet constructor does'
                         'not match precomputed channels.')
 
-            blocks1.append(Ff.Node(blocks1[i-1], Fm.GLOWCouplingBlock, {
-                'subnet_constructor': self.block},
-                name=f'in_coupling_{name1}_{i}'))
-            blocks2.append(Ff.Node(blocks2[i-1], Fm.GLOWCouplingBlock, {
-                'subnet_constructor': self.block},
-                name=f'in_coupling_{name2}_{i}'))
+            args = {
+                'subnet_constructor': self.block,
+                'clamp': self.clamp,
+                'act_norm': self.act_norm,
+                'act_norm_type': self.act_norm_type,
+                'permute_soft': self.soft_permutation
+            }
+
+            blocks1.append(Ff.Node(blocks1[i-1], AIO_HighPerfCouplingBlock,
+                                   args,
+                                   name=f'in_coupling_{name1}_{i}'))
+            blocks2.append(Ff.Node(blocks2[i-1], AIO_HighPerfCouplingBlock,
+                                   args,
+                                   name=f'in_coupling_{name2}_{i}'))
 
         return blocks1, blocks2
 
@@ -216,13 +241,13 @@ class Invertible(nn.Module):
         """
         assert n_blocks >= 1
 
-        blocks = [Ff.Node(inp.out0, Fm.GLOWCouplingBlock, {
+        blocks = [Ff.Node(inp.out0, AIO_HighPerfCouplingBlock, {
                           'subnet_constructor': self.block},
                           name=f'out_coupling_0')]
 
         # add first blocks
         for i in range(n_blocks - 1):
-            blocks.append(Ff.Node(blocks[i - 1], Fm.GLOWCouplingBlock, {
+            blocks.append(Ff.Node(blocks[i - 1], AIO_HighPerfCouplingBlock, {
                           'subnet_constructor': self.block},
                 name=f'out_coupling_{i+1}'))
 
@@ -295,6 +320,11 @@ class ZixelWrapper(nn.Module):
         zi_zj = torch.sum(zixels ** 2, dim=1, keepdim=True)
         zi_mj = F.conv2d(zixels, mu[0])
 
+        # print('mi_mj:', torch.max(mi_mj).item(), 'zi_zj:',
+        #       torch.max(zi_zj).item(), 'zi_mj:',  torch.max(zi_mj).item(),
+        #       'mu:', torch.max(mu).item(), 'z:', torch.max(zixels).item())
+
+        # return torch.sqrt(-2.0 * zi_mj + zi_zj + mi_mj)
         return -2.0 * zi_mj + zi_zj + mi_mj
 
     def forward(self, h_views, v_views, i_views=None, d_views=None):
@@ -320,8 +350,9 @@ class ZixelWrapper(nn.Module):
         output['dists'] = ZixelWrapper.cluster_distances(
             output['zixels'], output['mu'])
 
-        one_hot = (torch.max(output['dists'], 1, keepdim=True)[
+        one_hot = (torch.min(output['dists'], 1, keepdim=True)[
                    0] == output['dists']).float()
+        output['one_hot'] = one_hot
         output['mean'] = class_to_reg(
             one_hot, self.disp_min, self.disp_max, self.steps)
 

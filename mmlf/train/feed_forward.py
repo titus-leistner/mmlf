@@ -24,6 +24,10 @@ import click
 @click.option('--model_uncert', is_flag=True, help='Use uncertainty model?')
 @click.option('--model_unet', is_flag=True, help='Use a U-Net after the multistream network?')
 @click.option('--model_invertible', is_flag=True, help='Use invertible architecture?')
+@click.option('--model_clamp', default=0.7, help='Output clamp for coupling block?')
+@click.option('--model_act_norm', default=0.7, help='Activation normalization for coupling block?')
+@click.option('--model_act_norm_type', default='SOFTPLUS', help='Type of activation normalization for coupling block?')
+@click.option('--model_soft_permutation', is_flag=True, help='Use soft permuation for coupling block?')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
 @click.option('--train_num_workers', default=4, help='Number of workors for data loader')
@@ -35,7 +39,7 @@ import click
 @click.option('--train_max_downscale', default=4, help='Maximum factor of down scaling for data augmentation')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
 @click.option('--train_loss_padding', default=None, type=float, help='Margin around ground truth to apply loss')
-@click.option('--val_interval', default=1000, help='Validation interval')
+@click.option('--val_interval', default=100, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 @click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
 @click.option('--val_disp_min', default=-3.5, help='Minimum disparity of dataset')
@@ -82,7 +86,13 @@ def main(output_dir, **kwargs):
     else:
         model = FeedForward(**kwargs).cuda()
 
-    optimizer = torch.optim.RMSprop(model.parameters(), lr=kwargs['train_lr'])
+    if kwargs['model_invertible']:
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=kwargs['train_lr'])
+    else:
+        optimizer = torch.optim.RMSprop(
+            model.parameters(), lr=kwargs['train_lr'])
+
     loss_fn = loss.MaskedL1Loss()
     loss_uncert_fn = loss.UncertaintyMSELoss()
     loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
@@ -95,7 +105,17 @@ def main(output_dir, **kwargs):
     if kwargs['train_resume']:
         print('Resume training...')
         state = torch.load(os.path.join(output_dir, 'checkpoint.pt'))
+
+        # remove temporary vars
+        for k in list(state['model_state_dict']):
+            if 'tmp' in k:
+                print(f'Removing "{k}" from state dict...')
+                del state['model_state_dict'][k]
+
         model.load_state_dict(state['model_state_dict'])
+        if kwargs['model_invertible']:
+            model.invertible.mu.data.copy_(state['mu'].data)
+
         optimizer.load_state_dict(state['optimizer_state_dict'])
 
         # manually set new learning rate
@@ -123,7 +143,8 @@ def main(output_dir, **kwargs):
         print(header, file=log)
 
     # model saver
-    model_saver = ModelSaver(only_best=True)
+    # TODO: Enable only best
+    model_saver = ModelSaver(only_best=False)
 
     while True:
         for data in trainloader:
@@ -192,7 +213,7 @@ def main(output_dir, **kwargs):
                         output = val_model(h_views, v_views, i_views, d_views)
 
                         if kwargs['model_uncert']:
-                            loss_val = loss_uncert_fn(output, gt, logvar)
+                            loss_val = loss_uncert_fn(output, gt, mask)
                         else:
                             loss_val = loss_fn(output, gt, mask)
 
@@ -218,10 +239,14 @@ def main(output_dir, **kwargs):
                     mse_avg /= j
                     bad_pix_avg /= j
 
+                    save_additional = {}
+                    if kwargs['model_invertible']:
+                        save_additional['mu'] = model.module.invertible.mu
+
                     # save model
                     model_saver(os.path.join(output_dir, 'checkpoint.pt'),
                                 model, optimizer, kwargs, None, i,
-                                loss_val_avg)
+                                loss_val_avg, **save_additional)
 
             output = f'{i:>7}, {loss_train:.8f}, {loss_val_avg:.8f}, {mse_avg:.8f}, {bad_pix_avg:.8f}'
             print(output)

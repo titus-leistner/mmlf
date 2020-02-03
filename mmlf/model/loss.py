@@ -174,11 +174,14 @@ class InformationBottleneckLoss(nn.Module):
         self.beta_cat_ce = 1.0 * beta / (1.0 + beta)
 
     def forward(self, input, target, mask):
-
         zixels = input['zixels']
         jac = input['jac']
         mu = input['mu']
         dists = input['dists']
+
+        print('mean dist:', torch.mean(dists).item())
+        print('mean absolute mu:', torch.mean(torch.abs(mu)).item())
+        print('mean absolute z:', torch.mean(torch.abs(zixels)).item())
 
         w = zixels.shape[-1]
         h = zixels.shape[-2]
@@ -193,6 +196,8 @@ class InformationBottleneckLoss(nn.Module):
                       dim=1)
         nll = nll.mean()
         cat_ce = cat_ce.mean()
+
+        print(f'nll: {nll.item()}, cat_ce: {cat_ce.item()}')
 
         loss = self.beta_nll * nll + self.beta_cat_ce * cat_ce
 

@@ -19,7 +19,7 @@ class ModelSaver:
         self.best_loss = None
 
     def __call__(self, fname, model, optimizer=None, hyper_parameters=None,
-                 epoch=None, iteraration=None, loss=None):
+                 epoch=None, iteraration=None, loss=None, **kwargs):
         """
         Save a model
 
@@ -68,6 +68,8 @@ class ModelSaver:
             'iteration': iteraration,
             'loss': loss
         }
+
+        state.update(kwargs)
 
         torch.save(state, fname)
 
@@ -145,9 +147,11 @@ def class_to_reg(arr, start, stop, n_steps):
     :param: n_steps: number of classes
     :type: n_steps: int
     """
+    # print(arr[0, :, 16, 16])
     result = torch.linspace(start, stop, n_steps).view(
         (1, -1, 1, 1)).to(arr.device)
     result = torch.sum(result * arr, 1)
+    # print(result)
 
     return result
 
