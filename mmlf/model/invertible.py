@@ -104,12 +104,12 @@ class Invertible(nn.Module):
             self.merge_net + self.out_net)
 
         # cluster centers
-        dims = 4
+        self.dims = 4
         if model_cross:
-            dims = 2
+            self.dims = 2
 
-        dims *= 3 * model_views
-        self.mu = nn.Parameter(torch.randn(1, dims, dims))
+        self.dims *= 3 * model_views
+        self.mu = nn.Parameter(torch.randn(1, self.dims, self.dims))
 
     def block(self, ch_in, ch_out=None, out_bn_relu=True):
         """
@@ -291,7 +291,8 @@ class Invertible(nn.Module):
             views.append(d_views)
 
         zixels = self.model(views)
-        jac = self.model.log_jacobian(run_forward=False)
+        jac = self.model.log_jacobian(
+            run_forward=False) / float(self.dims * w * h)
 
         return {'zixels': zixels, 'jac': jac, 'mu': self.mu}
 
@@ -355,6 +356,11 @@ class ZixelWrapper(nn.Module):
         output['one_hot'] = one_hot
         output['mean'] = class_to_reg(
             one_hot, self.disp_min, self.disp_max, self.steps)
+
+        print(output['dists'])
+        output['nll'] = (0.5 * output['dists'] - output['jac']
+                         ) / float(output['dists'].shape[1])
+        print(output['jac'])
 
         return output
 
