@@ -357,10 +357,9 @@ class ZixelWrapper(nn.Module):
         output['mean'] = class_to_reg(
             one_hot, self.disp_min, self.disp_max, self.steps)
 
-        print(output['dists'])
-        output['nll'] = (0.5 * output['dists'] - output['jac']
-                         ) / float(output['dists'].shape[1])
-        print(output['jac'])
+        output['nll'] = (0.5 * output['dists'] -
+                         output['jac'].view(-1, 1, 1, 1)) / \
+            float(output['dists'].shape[1])
 
         return output
 

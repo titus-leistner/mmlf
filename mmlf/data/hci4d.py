@@ -12,7 +12,7 @@ from ..utils import dl
 from ..utils import lf
 
 
-class HCI4D(Dataset):
+class HCI4D:
     """
     A class for the synthetic HCI 4D Light Field Dataset
 
