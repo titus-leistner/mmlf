@@ -19,7 +19,7 @@ def gaussian(x, mean, var):
 @click.argument('y', type=int)
 @click.option('--start', default=-3.5, help='lower limit')
 @click.option('--stop', default=3.5, help='upper limit')
-@click.option('--step', default=0.01, help='step width')
+@click.option('--step', default=0.005, help='step width')
 @click.option('--sum_only', is_flag=True, help='sum over gaussians?')
 def main(sum_only, **kwargs):
     if sum_only:
@@ -36,14 +36,19 @@ def sum(input, output, x, y, start, stop, step):
 
     with open(output, 'w') as f:
         f.write(f'x, p\n')
-
+        norm = 0.0
+        values = []
         for x in np.arange(start, stop, step):
-            print(x)
             y = 0.0
             for i in range(num_gs):
-                y += gaussian(x, means[i], vars[i])
-            y /= float(num_gs)
+                y += gaussian(x, means[i], vars[i]) / vars[i]
 
+            values.append((x, y))
+            norm = max(y, norm)
+
+        for value in values:
+            x, y = value
+            y /= norm
             f.write(f'{x}, {y}\n')
 
 
@@ -66,7 +71,7 @@ def separate(input, output, x, y, start, stop, step):
             f.write(f'{x}, ')
             for i in range(num_gs):
                 print(means[i])
-                y = gaussian(x, means[i], vars[i])
+                y = gaussian(x, means[i], vars[i]) / vars[i]
                 f.write(f'{y}')
                 if i < num_gs - 1:
                     f.write(', ')

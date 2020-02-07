@@ -1,4 +1,4 @@
-from torch.utils.data.dataset import Dataset
+
 
 import numpy as np
 
@@ -203,7 +203,7 @@ class HCI4D(Dataset):
         return data
 
     def save_batch(self, path, index, result=None, uncert=None, runtime=None,
-                   gmm=None):
+                   gmm=None, nll=None):
         """
         Save the scene batch, ground truth and result to disk.
         Creates one one subdirectory in 'scenes/' for each scene in the batch.
@@ -227,6 +227,9 @@ class HCI4D(Dataset):
 
         :param gmm: GMM, containing means and vars for the batch
         :type gmm: np.ndarray of shape (2, K, b, h, w)
+
+        :param nll: cluster distances
+        :type nll: np.ndarray of shape (K, h, w)
         """
         # create directories
         scenes = os.path.join(path, 'scenes')
@@ -275,6 +278,7 @@ class HCI4D(Dataset):
                 # normalize and clip result
                 disp_min = np.min(gt)
                 disp_max = np.max(gt)
+
                 res_img = result[arr_i].copy()
                 res_img = (res_img - disp_min) / (disp_max - disp_min)
                 res_img = np.clip(res_img, 0.0, 1.0)
@@ -298,6 +302,9 @@ class HCI4D(Dataset):
             if gmm is not None:
                 np.save(os.path.join(scene_dir, 'gmm.npy'), gmm[:, :, arr_i])
 
+            if nll is not None:
+                np.save(os.path.join(scene_dir, 'nll.npy'),
+                        nll[arr_i, ...])
             # if mask is not None:
             #     dl.save_img(os.path.join(
             #         scene_dir, 'mask.png'), mask)

@@ -5,6 +5,7 @@ import time
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
 from ..model.ensamble import Ensamble
+from ..model.invertible import ZixelWrapper
 from ..model import loss
 
 import numpy as np
@@ -15,6 +16,8 @@ import click
 @click.command()
 @click.argument('output_dir', type=click.Path(exists=True))
 @click.argument('dataset', type=click.Path(exists=True))
+@click.option('--model_invertible', is_flag=True,
+              help='Use invertible architecture?')
 @click.option('--val_loss_margin', default=15,
               help='Margin around each image to omit for the validation loss')
 @click.option('--val_ensamble', is_flag=True,
@@ -25,8 +28,9 @@ import click
               help='Maximum disparity of dataset')
 @click.option('--val_disp_step', default=0.1,
               help='Disparity increment for ensamble')
-def main(output_dir, dataset, val_loss_margin, val_ensamble, val_disp_step,
-         val_disp_min, val_disp_max):
+def main(output_dir, dataset, model_invertible,
+         val_loss_margin, val_ensamble, val_disp_step, val_disp_min,
+         val_disp_max):
     valset = hci4d.HCI4D(dataset)
     valloader = torch.utils.data.DataLoader(valset,
                                             batch_size=1,
@@ -36,8 +40,10 @@ def main(output_dir, dataset, val_loss_margin, val_ensamble, val_disp_step,
     state = torch.load(os.path.join(output_dir, 'checkpoint.pt'))
     kwargs = state['hyper_parameters']
 
-    # init model and loss functions
-    model = FeedForward(**kwargs).cuda()
+    if model_invertible:
+        model = ZixelWrapper(**kwargs).cuda()
+    else:
+        model = FeedForward(**kwargs).cuda()
 
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
@@ -45,6 +51,10 @@ def main(output_dir, dataset, val_loss_margin, val_ensamble, val_disp_step,
     # load model
     print('Loading model...')
     model.load_state_dict(state['model_state_dict'])
+
+    # load mu
+    if model_invertible:
+        model.invertible.mu.data.copy_(state['mu'].data)
 
     if val_ensamble:
         # initialize ensamble
@@ -90,15 +100,20 @@ def main(output_dir, dataset, val_loss_margin, val_ensamble, val_disp_step,
             # GMM parameters
             means = output.get('means', None)
             logvars = output.get('logvars', None)
+
             gmm = None
             if means is not None and logvars is not None:
                 means = means.cpu().numpy()
                 logvars = np.exp(logvars.cpu().numpy())
                 gmm = np.stack([means, logvars], 0)
 
+            nll = output.get('nll', None)
+            if nll is not None:
+                nll = nll.cpu().numpy()
+
             runtime = time.time() - t_start
             valset.save_batch(output_dir, index.numpy(), mean,
-                              logvar, runtime, gmm)
+                              logvar, runtime, gmm, nll)
 
         mse_avg /= i
         bad_pix_avg /= i
