@@ -354,12 +354,15 @@ class ZixelWrapper(nn.Module):
         one_hot = (torch.min(output['dists'], 1, keepdim=True)[
                    0] == output['dists']).float()
         output['one_hot'] = one_hot
+
         output['mean'] = class_to_reg(
             one_hot, self.disp_min, self.disp_max, self.steps)
 
         output['nll'] = (0.5 * output['dists'] -
                          output['jac'].view(-1, 1, 1, 1)) / \
             float(output['dists'].shape[1])
+
+        output['logvar'] = torch.min(output['nll'], 1)[0]
 
         return output
 
