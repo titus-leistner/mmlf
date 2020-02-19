@@ -94,7 +94,7 @@ def main(output_dir, **kwargs):
             model.parameters(), lr=kwargs['train_lr'])
 
     loss_fn = loss.MaskedL1Loss()
-    loss_uncert_fn = loss.UncertaintyMSELoss()
+    loss_uncert_fn = loss.UncertaintyL1Loss()
     loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
@@ -164,11 +164,10 @@ def main(output_dir, **kwargs):
             gt = gt.cuda()
             gt_classes = gt_classes.cuda()
 
-            if not kwargs['model_uncert']:
-                # no loss if no texture
-                mask = mask.int() * loss.create_mask_texture(
-                    center, kwargs['model_radius'] * 2 + 1,
-                    kwargs['train_mae_threshold']).int()
+            # no loss if no texture
+            mask = mask.int() * loss.create_mask_texture(
+                center, kwargs['model_radius'] * 2 + 1,
+                kwargs['train_mae_threshold']).int()
 
             mask = mask.cuda()
 
@@ -182,7 +181,7 @@ def main(output_dir, **kwargs):
             output = model(h_views, v_views, i_views, d_views)
 
             if kwargs['model_uncert']:
-                loss_train = loss_uncert_fn(output, gt, None)
+                loss_train = loss_uncert_fn(output, gt, mask)
             elif kwargs['model_invertible']:
                 loss_train = loss_invertible_fn(output, gt_classes, None)
             else:

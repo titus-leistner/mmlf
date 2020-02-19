@@ -131,10 +131,11 @@ class UncertaintyMSELoss(nn.Module):
         # add uncertainty
         loss += 0.5 * input['logvar']
 
-        # mean
-        loss = torch.mean(loss)
+        # multiply with mask
+        count = mask.int().sum()
+        loss *= mask.float()
 
-        return loss
+        return loss.sum() / count
 
 
 class UncertaintyL1Loss(nn.Module):
@@ -147,16 +148,17 @@ class UncertaintyL1Loss(nn.Module):
 
     def forward(self, input, target, mask):
         # compute loss with uncertainty
-        loss = 0.5 * torch.exp(-input['logvar']) * \
+        loss = torch.exp(-input['logvar']) * \
             torch.abs(input['mean'] - target)
 
         # add uncertainty
-        loss += 0.5 * input['logvar']
+        loss += input['logvar']
 
-        # mean
-        loss = torch.mean(loss)
+        # multiply with mask
+        count = mask.int().sum()
+        loss *= mask.float()
 
-        return loss
+        return loss.sum() / count
 
 
 class InformationBottleneckLoss(nn.Module):
