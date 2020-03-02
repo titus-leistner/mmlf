@@ -1,8 +1,13 @@
+import numpy as np
 import torch
 import torch.nn as nn
 
 from .unet import UNet
 from ..utils.dl import class_to_reg
+
+
+def laplacian(x, mu, b):
+    return 1.0 / (2.0 * b) * torch.exp(-torch.abs(x - mu) / b)
 
 
 class FeedForward(nn.Module):
@@ -251,9 +256,13 @@ class FeedForward(nn.Module):
 
         scores = None
         one_hot = None
+        posterior = None
         if self.discrete:
             scores = output
             one_hot = (torch.max(scores, 1, keepdim=True)[0] == scores).float()
+            posterior = torch.exp(scores)
+            posterior = posterior / \
+                torch.sum(torch.exp(scores), 1, keepdim=True)
 
             mean = class_to_reg(
                 one_hot, self.disp_min, self.disp_max, self.steps)
@@ -261,7 +270,15 @@ class FeedForward(nn.Module):
         logvar = None
 
         if self.uncert:
-            logvar = output(features)[:, 1]
+            logvar = output[:, 1]
+            var = torch.exp(logvar)
+
+            b, h, w = var.shape
+            posterior = torch.zeros((b, self.steps, h, w))
+            posterior[:, :, :, :] = torch.from_numpy(np.linspace(self.disp_min, self.disp_max, self.steps)).view(1, -1, 1, 1)
+            posterior = posterior.to(mean.device)
+
+            posterior = laplacian(posterior, mean, var)
 
         return {'mean': mean, 'logvar': logvar, 'scores': scores,
-                'one_hot': one_hot}
+                'one_hot': one_hot, 'posterior': posterior}

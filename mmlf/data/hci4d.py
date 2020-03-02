@@ -76,7 +76,8 @@ class HCI4D:
         files = [f.name for f in os.scandir(scene)]
         imgs = [f for f in files if (f.endswith('.png') or f.endswith(
             '.jpg') or f.endswith('.jpeg')) and 'normals' not in f and
-            'mask' not in f and 'objectids' not in f and 'unused' not in f]
+            'mask' not in f and 'objectids' not in f and 'unused' not in f
+            and 'edges' not in f and 'specular' not in f]
         imgs.sort()
 
         # compute indices of cross setup
@@ -203,7 +204,7 @@ class HCI4D:
         return data
 
     def save_batch(self, path, index, result=None, uncert=None, runtime=None,
-                   gmm=None, nll=None):
+                   gmm=None, nll=None, posterior=None):
         """
         Save the scene batch, ground truth and result to disk.
         Creates one one subdirectory in 'scenes/' for each scene in the batch.
@@ -229,6 +230,9 @@ class HCI4D:
         :type gmm: np.ndarray of shape (2, K, b, h, w)
 
         :param nll: cluster distances
+        :type nll: np.ndarray of shape (K, h, w)
+
+        :param posterior: posterior distribution
         :type nll: np.ndarray of shape (K, h, w)
         """
         # create directories
@@ -305,6 +309,10 @@ class HCI4D:
             if nll is not None:
                 np.save(os.path.join(scene_dir, 'nll.npy'),
                         nll[arr_i, ...])
+
+            if posterior is not None:
+                np.save(os.path.join(scene_dir, 'posterior.npy'),
+                        posterior[arr_i, ...])
             # if mask is not None:
             #     dl.save_img(os.path.join(
             #         scene_dir, 'mask.png'), mask)

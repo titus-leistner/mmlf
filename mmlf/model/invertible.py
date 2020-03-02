@@ -362,6 +362,11 @@ class ZixelWrapper(nn.Module):
                          output['jac'].view(-1, 1, 1, 1)) / \
             float(output['dists'].shape[1])
 
+        # compute posterior
+        posterior = torch.exp(-output['nll'])
+        posterior = posterior / torch.sum(posterior, 1, keepdim=True)
+        output['posterior'] = posterior
+
         output['logvar'] = torch.min(output['nll'], 1)[0]
 
         return output

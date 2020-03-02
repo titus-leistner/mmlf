@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from ..data.hci4d import Shift
+from .feed_forward import laplacian
 
 
 class Ensamble(nn.Module):
@@ -56,6 +57,7 @@ class Ensamble(nn.Module):
         """
         means = []
         logvars = []
+        vars = []
         for shift_disp in np.arange(self.disp_min, self.disp_max,
                                     self.disp_step):
             if i_views is None or d_views is None:
@@ -71,6 +73,7 @@ class Ensamble(nn.Module):
 
             means.append(output['mean'] + shift_disp)
             logvars.append(output['logvar'])
+            vars.append(torch.exp(output['logvar']))
 
         means = torch.stack(means)
         logvars = torch.stack(logvars)
@@ -82,6 +85,22 @@ class Ensamble(nn.Module):
         mean = means.gather(0, min_index)[0]
         logvar = logvars.gather(0, min_index)[0]
 
+        # compute posterior
+        b, h, w = means[0].shape
+        disp = torch.zeros((b, len(means), h, w))
+        disp[:, :, :, :] = torch.from_numpy(np.linspace(
+            self.disp_min, self.disp_max, len(means))).view(1, -1, 1, 1)
+        disp = disp.to(means[0].device)
+
+        posterior = torch.zeros(
+            (b, len(means), h, w)).to(means[0].device)
+
+        for i in range(len(means)):
+            print(posterior.shape)
+            posterior += laplacian(disp, means[i], vars[i])
+
+        posterior /= float(len(means))
+
         # compute variance as
         # average variance + average squared mean - square of average mean
         # var = torch.exp(logvars)
@@ -91,4 +110,4 @@ class Ensamble(nn.Module):
         # logvar = torch.log(avg_var + avg_sq_mean - sq_avg_mean)
 
         return {'mean': mean, 'logvar': logvar,
-                'means': means, 'logvars': logvars}
+                'means': means, 'logvars': logvars, 'posterior': posterior}

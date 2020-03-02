@@ -18,6 +18,8 @@ import click
 @click.argument('dataset', type=click.Path(exists=True))
 @click.option('--model_invertible', is_flag=True,
               help='Use invertible architecture?')
+@click.option('--model_discrete', is_flag=True,
+              help='Discretize disparity output?')
 @click.option('--val_loss_margin', default=15,
               help='Margin around each image to omit for the validation loss')
 @click.option('--val_ensamble', is_flag=True,
@@ -28,7 +30,7 @@ import click
               help='Maximum disparity of dataset')
 @click.option('--val_disp_step', default=0.1,
               help='Disparity increment for ensamble')
-def main(output_dir, dataset, model_invertible,
+def main(output_dir, dataset, model_invertible, model_discrete,
          val_loss_margin, val_ensamble, val_disp_step, val_disp_min,
          val_disp_max):
     valset = hci4d.HCI4D(dataset)
@@ -39,6 +41,7 @@ def main(output_dir, dataset, model_invertible,
     # load hyper parameters
     state = torch.load(os.path.join(output_dir, 'checkpoint.pt'))
     kwargs = state['hyper_parameters']
+    kwargs.update({'model_discrete': model_discrete, 'val_disp_min': val_disp_min, 'val_disp_max': val_disp_max})
 
     if model_invertible:
         model = ZixelWrapper(**kwargs).cuda()
@@ -111,9 +114,12 @@ def main(output_dir, dataset, model_invertible,
             if nll is not None:
                 nll = nll.cpu().numpy()
 
+            posterior = output.get('posterior', None)
+            if posterior is not None:
+                posterior = posterior.cpu().numpy()
             runtime = time.time() - t_start
             valset.save_batch(output_dir, index.numpy(), mean,
-                              logvar, runtime, gmm, nll)
+                              logvar, runtime, gmm, nll, posterior)
 
         mse_avg /= i
         bad_pix_avg /= i
