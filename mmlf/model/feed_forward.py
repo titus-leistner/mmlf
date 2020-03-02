@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from .unet import UNet
+from ..utils.dl import class_to_reg
 
 
 class FeedForward(nn.Module):
@@ -16,7 +17,7 @@ class FeedForward(nn.Module):
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
                  model_chs, model_views, model_cross, model_uncert, model_unet,
-                 **kwargs):
+                 model_discrete, val_disp_min, val_disp_max, **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -41,6 +42,15 @@ class FeedForward(nn.Module):
 
         :param model_unet: Use a U-Net instead of fully convolutional out net?
         :type model_unet: bool
+
+        :param model_discrete: Discretize the output space?
+        :type model_discrete: bool
+
+        :param val_disp_min: Minimum disparity in the data
+        :type val_disp_min: bool
+
+        :param val_disp_max: Maximum disparity in the data
+        :type val_disp_max: bool
         """
         super(FeedForward, self).__init__()
 
@@ -49,6 +59,14 @@ class FeedForward(nn.Module):
         self.views = model_views
         self.cross = model_cross
         self.uncert = model_uncert
+        self.discrete = model_discrete
+
+        self.disp_min = val_disp_min
+        self.disp_max = val_disp_max
+        self.steps = 4
+        if model_cross:
+            self.steps = 2
+        self.steps *= model_views * 3
 
         if model_ksize % 2 == 1:
             self.padding1 = model_ksize // 2
@@ -141,6 +159,8 @@ class FeedForward(nn.Module):
         out_chs = 1
         if self.uncert:
             out_chs = 2
+        elif self.discrete:
+            out_chs = self.steps
 
         blocks.append(self.block(chs, out_chs, False))
 
@@ -226,11 +246,22 @@ class FeedForward(nn.Module):
             features = torch.cat(
                 [h_features, v_features, i_features, d_features], 1)
 
-        mean = self.out_net(features)[:, 0]
+        output = self.out_net(features)
+        mean = output[:, 0]
+
+        scores = None
+        one_hot = None
+        if self.discrete:
+            scores = output
+            one_hot = (torch.max(scores, 1, keepdim=True)[0] == scores).float()
+
+            mean = class_to_reg(
+                one_hot, self.disp_min, self.disp_max, self.steps)
 
         logvar = None
 
         if self.uncert:
-            logvar = self.out_net(features)[:, 1]
+            logvar = output(features)[:, 1]
 
-        return {'mean': mean, 'logvar': logvar}
+        return {'mean': mean, 'logvar': logvar, 'scores': scores,
+                'one_hot': one_hot}

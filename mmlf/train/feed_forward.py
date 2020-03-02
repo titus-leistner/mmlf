@@ -22,6 +22,7 @@ import click
 @click.option('--model_views', default=9, help='Number of viewpoints of the input light field, e.g. 9 for 9+8 views')
 @click.option('--model_cross', is_flag=True, help='Only use cross input?')
 @click.option('--model_uncert', is_flag=True, help='Use uncertainty model?')
+@click.option('--model_discrete', is_flag=True, help='Discretize disparity output?')
 @click.option('--model_unet', is_flag=True, help='Use a U-Net after the multistream network?')
 @click.option('--model_invertible', is_flag=True, help='Use invertible architecture?')
 @click.option('--model_clamp', default=0.7, help='Output clamp for coupling block?')
@@ -95,6 +96,7 @@ def main(output_dir, **kwargs):
 
     loss_fn = loss.MaskedL1Loss()
     loss_uncert_fn = loss.UncertaintyL1Loss()
+    loss_discrete_fn = loss.MaskedCrossEntropy()
     loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
@@ -182,6 +184,8 @@ def main(output_dir, **kwargs):
 
             if kwargs['model_uncert']:
                 loss_train = loss_uncert_fn(output, gt, mask)
+            elif kwargs['model_discrete']:
+                loss_train = loss_discrete_fn(output, gt_classes, mask)
             elif kwargs['model_invertible']:
                 loss_train = loss_invertible_fn(output, gt_classes, None)
             else:

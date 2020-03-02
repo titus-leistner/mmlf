@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def create_mask_margin(shape, margin=0):
@@ -89,6 +90,30 @@ class MaskedMSELoss(nn.Module):
         diff *= torch.flatten(mask).float()
 
         return diff.sum() / count
+
+
+class MaskedCrossEntropy(nn.Module):
+    """
+    Apply Cross Entropy loss only to some pixels given by a mask
+    """
+
+    def __init__(self):
+        super(MaskedCrossEntropy, self).__init__()
+
+    def forward(self, input, target, mask):
+        scores = F.relu(input['scores'])
+        loss = torch.exp(torch.sum(scores * target, 1))
+        # print('logit mean:', torch.mean(scores).item())
+        loss = loss / torch.sum(torch.exp(scores), 1)
+        # print('loss:', loss)
+        loss = -torch.log(loss)
+
+        # apply mask
+        count = mask.float().sum()
+        loss *= mask.float()
+
+        print('output loss:', loss.sum().item())
+        return loss.sum() / count
 
 
 class MaskedBadPix(nn.Module):
