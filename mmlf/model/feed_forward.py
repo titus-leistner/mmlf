@@ -257,6 +257,7 @@ class FeedForward(nn.Module):
         scores = None
         one_hot = None
         posterior = None
+        logvar = None
         if self.discrete:
             scores = output
             one_hot = (torch.max(scores, 1, keepdim=True)[0] == scores).float()
@@ -267,7 +268,11 @@ class FeedForward(nn.Module):
             mean = class_to_reg(
                 one_hot, self.disp_min, self.disp_max, self.steps)
 
-        logvar = None
+            logvar = torch.zeros((b, self.steps, h, w)).to(posterior.device)
+            logvar[:, :, :, :] = torch.from_numpy(np.linspace(
+                self.disp_min, self.disp_max, self.steps)).view(1, -1, 1, 1)
+            logvar = (logvar - mean) ** 2.0 * posterior
+            logvar = torch.log(torch.sum(logvar, 1))
 
         if self.uncert:
             logvar = output[:, 1]
@@ -275,7 +280,8 @@ class FeedForward(nn.Module):
 
             b, h, w = var.shape
             posterior = torch.zeros((b, self.steps, h, w))
-            posterior[:, :, :, :] = torch.from_numpy(np.linspace(self.disp_min, self.disp_max, self.steps)).view(1, -1, 1, 1)
+            posterior[:, :, :, :] = torch.from_numpy(np.linspace(
+                self.disp_min, self.disp_max, self.steps)).view(1, -1, 1, 1)
             posterior = posterior.to(mean.device)
 
             posterior = laplacian(posterior, mean, var)

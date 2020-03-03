@@ -121,8 +121,8 @@ def main(output_dir, dataset, model_invertible, model_discrete,
             valset.save_batch(output_dir, index.numpy(), mean,
                               logvar, runtime, gmm, nll, posterior)
 
-        mse_avg /= i
-        bad_pix_avg /= i
+        mse_avg /= (i + 1)
+        bad_pix_avg /= (i + 1)
 
     print(f'MSE: {mse_avg:.8f}, BadPix007: {bad_pix_avg:.8f}')
 

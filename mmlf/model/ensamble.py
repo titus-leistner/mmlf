@@ -101,6 +101,12 @@ class Ensamble(nn.Module):
 
         posterior /= float(len(means))
 
+        # logvar = torch.zeros((b, len(means), h, w)).to(posterior.device)
+        # logvar[:, :, :, :] = torch.from_numpy(np.linspace(
+        #     self.disp_min, self.disp_max, len(means))).view(1, -1, 1, 1)
+        # logvar = (logvar - mean) ** 2.0 * posterior
+        # logvar = torch.log(torch.sum(logvar, 1))
+
         # compute variance as
         # average variance + average squared mean - square of average mean
         # var = torch.exp(logvars)

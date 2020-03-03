@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -355,18 +356,40 @@ class ZixelWrapper(nn.Module):
                    0] == output['dists']).float()
         output['one_hot'] = one_hot
 
-        output['mean'] = class_to_reg(
-            one_hot, self.disp_min, self.disp_max, self.steps)
-
         output['nll'] = (0.5 * output['dists'] -
                          output['jac'].view(-1, 1, 1, 1)) / \
             float(output['dists'].shape[1])
 
+        # compute mean
+        mean = class_to_reg(
+            one_hot, self.disp_min, self.disp_max, self.steps)
+
         # compute posterior
         posterior = torch.exp(-output['nll'])
         posterior = posterior / torch.sum(posterior, 1, keepdim=True)
-        output['posterior'] = posterior
 
+        b, _, h, w = posterior.shape
+        logvar = torch.zeros((b, self.steps, h, w)).to(posterior.device)
+        logvar[:, :, :, :] = torch.from_numpy(np.linspace(
+            self.disp_min, self.disp_max, self.steps)).view(1, -1, 1, 1)
+        logvar = (logvar - mean) ** 2.0 * posterior
+        logvar = torch.log(torch.sum(logvar, 1))
+
+        # compute soft mean
+        # best_idx = torch.max(posterior, 1)[1]
+        # soft_weights = posterior.clone()
+        # soft_weights -= torch.min(soft_weights, 1, keepdim=True)[0]
+        # for y in range(soft_weights.shape[2]):
+        #     for x in range(soft_weights.shape[3]):
+        #         for i in range(soft_weights.shape[0]):
+        #             soft_weights[i, :best_idx[i, y, x]-1, y, x] = 0.0
+        #             soft_weights[i, best_idx[i, y, x]+2:, y, x] = 0.0
+        # soft_weights = soft_weights / torch.sum(soft_weights, 1, keepdim=True)
+        # print(soft_weights[0, :, 128, 128])
+
+        output['posterior'] = posterior
+        output['mean'] = mean
+        output['logvar'] = logvar
         output['logvar'] = torch.min(output['nll'], 1)[0]
 
         return output
