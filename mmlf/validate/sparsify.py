@@ -67,7 +67,8 @@ def auc(curve, step):
 @click.argument('output_dir', type=click.Path(exists=True))
 @click.option('--step', default=0.01, help='Step size for sparsification.')
 @click.option('--mse/--l1', default=True, help='Use MSE or L1 loss?')
-def main(output_dir, step, mse):
+@click.option('--random', is_flag=True, default=False, help='Use Random Baseline?')
+def main(output_dir, step, mse, random):
     # set loss function
     if mse:
         loss_fn = masked_mse
@@ -82,6 +83,10 @@ def main(output_dir, step, mse):
         gt = pfm.load(os.path.join(scene, 'gt.pfm')).flatten()
         result = pfm.load(os.path.join(scene, 'result.pfm')).flatten()
         uncert = pfm.load(os.path.join(scene, 'uncert.pfm')).flatten()
+
+        if random:
+            print('Use Random')
+            uncert = np.random.random(uncert.size)
 
         # compute error
         error = np.abs(result - gt)

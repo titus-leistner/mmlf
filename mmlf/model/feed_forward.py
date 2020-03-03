@@ -271,7 +271,7 @@ class FeedForward(nn.Module):
             logvar = torch.zeros((b, self.steps, h, w)).to(posterior.device)
             logvar[:, :, :, :] = torch.from_numpy(np.linspace(
                 self.disp_min, self.disp_max, self.steps)).view(1, -1, 1, 1)
-            logvar = (logvar - mean) ** 2.0 * posterior
+            logvar = (logvar - mean.unsqueeze(1)) ** 2.0 * posterior
             logvar = torch.log(torch.sum(logvar, 1))
 
         if self.uncert:

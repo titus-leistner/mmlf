@@ -365,7 +365,8 @@ class ZixelWrapper(nn.Module):
             one_hot, self.disp_min, self.disp_max, self.steps)
 
         # compute posterior
-        posterior = torch.exp(-output['nll'])
+        print(output['nll'])
+        posterior = torch.exp(-output['nll'] * float(output['dists'].shape[1]))
         posterior = posterior / torch.sum(posterior, 1, keepdim=True)
 
         b, _, h, w = posterior.shape
@@ -390,7 +391,7 @@ class ZixelWrapper(nn.Module):
         output['posterior'] = posterior
         output['mean'] = mean
         output['logvar'] = logvar
-        output['logvar'] = torch.min(output['nll'], 1)[0]
+        # output['logvar'] = torch.min(output['nll'], 1)[0]
 
         return output
 
