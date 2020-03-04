@@ -53,7 +53,7 @@ def main(output_dir, start, stop, multi, lb):
 
         for y in range(LOSS_MARGIN, h - LOSS_MARGIN):
             for x in range(LOSS_MARGIN, w - LOSS_MARGIN):
-                if modes[y, x, 0] == modes[y, x, 1]:
+                if modes[y, x, 0] != modes[y, x, 1]:
                     if multi:
                         # multimodal
                         best = np.argpartition(post_modes[:, y, x], -k)[-k:]
