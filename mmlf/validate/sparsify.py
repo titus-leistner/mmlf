@@ -4,6 +4,7 @@ import os
 import click
 
 import numpy as np
+from skimage.io import imread, imsave
 
 from ..utils import pfm
 
@@ -83,6 +84,12 @@ def main(output_dir, step, mse, random):
         gt = pfm.load(os.path.join(scene, 'gt.pfm')).flatten()
         result = pfm.load(os.path.join(scene, 'result.pfm')).flatten()
         uncert = pfm.load(os.path.join(scene, 'uncert.pfm')).flatten()
+        img = np.flip(imread(os.path.join(scene, 'center.png')), 0)
+        img_out = np.zeros_like(img)
+        img_out[:, :] = np.asarray([255, 0, 0])
+
+        img_out_oracle = np.zeros_like(img)
+        img_out_oracle[:, :] = np.asarray([255, 0, 0])
 
         if random:
             print('Use Random')
@@ -111,6 +118,22 @@ def main(output_dir, step, mse, random):
 
                 mask_oracle[idx_oracle] = True
                 mask_uncert[idx_uncert] = True
+
+            print(i)
+            for y in range(img.shape[0]):
+                for x in range(img.shape[1]):
+                    if mask_uncert[y * img.shape[1] + x]:
+                        img_out[y, x, :] = img[y, x, :]
+                    if mask_oracle[y * img.shape[1] + x]:
+                        img_out_oracle[y, x, :] = img[y, x, :]
+            
+            border = 32
+            out = np.zeros((img.shape[0], 2 * img.shape[1] + border, 3))
+            out[:, 0:img.shape[1], :] = img_out
+            out[:, img.shape[1] + border:, :] = img_out_oracle
+            out = np.pad(out, ((104, 104), (112, 112), (0, 0)))
+
+            imsave(os.path.join(scene, f'sparse_{i:04d}.png'), np.flip(out, 0))
 
             loss_oracle = loss_fn(result, gt, mask_oracle)
             loss_uncert = loss_fn(result, gt, mask_uncert)

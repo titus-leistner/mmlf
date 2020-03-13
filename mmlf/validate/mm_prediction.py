@@ -4,7 +4,7 @@ import os
 import click
 
 import numpy as np
-from skimage.io import imsave
+from skimage.io import imread, imsave
 
 from ..utils import pfm
 
@@ -48,6 +48,11 @@ def main(output_dir, step, random):
         mode_prop = np.flip(pfm.load(os.path.join(
             scene, 'mode_prop.pfm')), 0).flatten()
 
+        img = imread(os.path.join(scene, 'center.png'))
+        img_out = img.copy()
+
+        img_out_oracle = img.copy()
+
         # compute error
 
         error = ~mask_gt
@@ -83,6 +88,24 @@ def main(output_dir, step, random):
             loss_pred = loss_fn(mask_pred, mask_gt)
 
             #print(loss_oracle, loss_pred)
+
+            
+            print(i)
+            for y in range(img.shape[0]):
+                for x in range(img.shape[1]):
+                    if mask_pred[y * img.shape[1] + x]:
+                        img_out[y, x, :] = np.asarray([255, 0, 0])
+                    if mask_oracle[y * img.shape[1] + x]:
+                        img_out_oracle[y, x, :] = np.asarray([255, 0, 0])
+            
+            border = 32
+            out = np.zeros((img.shape[0], 2 * img.shape[1] + border, 3))
+            out[:, 0:img.shape[1], :] = img_out
+            out[:, img.shape[1] + border:, :] = img_out_oracle
+            out = np.pad(out, ((104, 104), (112, 112), (0, 0)))
+
+            imsave(os.path.join(scene, f'mm_{i:04d}.png'), out)
+
             
             print(i, loss_oracle)
             loss[1, i] += loss_oracle

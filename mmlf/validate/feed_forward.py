@@ -63,6 +63,10 @@ def main(output_dir, dataset, model_invertible, model_discrete,
         # initialize ensamble
         model = Ensamble(model, val_disp_min, val_disp_max, val_disp_step)
 
+    print(model)
+    n_params = sum(p.numel() for p in model.parameters())
+    print('Number of parameters:', n_params)
+
     # validate
     with torch.no_grad():
         model.eval()

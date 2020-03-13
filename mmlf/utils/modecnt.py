@@ -12,7 +12,7 @@ from ..utils import pfm
 
 @click.command()
 @click.argument('output_dir', type=click.Path(exists=True))
-@click.option('--outlier', default=0.001, help='proporional outlier threshold')
+@click.option('--outlier', default=0.1, help='proporional outlier threshold')
 def main(output_dir, outlier):
     scenes = [f.path for f in os.scandir(
         os.path.join(output_dir, 'scenes')) if f.is_dir()]
