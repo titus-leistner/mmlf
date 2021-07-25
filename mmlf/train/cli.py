@@ -3,7 +3,7 @@ import os
 
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
-from ..model.invertible import ZixelWrapper
+#from ..model.invertible import ZixelWrapper
 from ..model.ensamble import Ensamble
 from ..utils.dl import ModelSaver, reg_to_class, class_to_reg
 from ..model import loss
@@ -83,10 +83,10 @@ def main(output_dir, **kwargs):
                                             shuffle=False, num_workers=1)
 
     # init model, optimizer and train iteration
-    if kwargs['model_invertible']:
-        model = ZixelWrapper(**kwargs).cuda()
-    else:
-        model = FeedForward(**kwargs).cuda()
+    # if kwargs['model_invertible']:
+    #     model = ZixelWrapper(**kwargs).cuda()
+    # else:
+    model = FeedForward(**kwargs).cuda()
 
     if kwargs['model_invertible']:
         optimizer = torch.optim.Adam(

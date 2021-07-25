@@ -5,7 +5,7 @@ import time
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
 from ..model.ensamble import Ensamble
-from ..model.invertible import ZixelWrapper
+# from ..model.invertible import ZixelWrapper
 from ..model import loss
 
 import numpy as np
@@ -43,10 +43,10 @@ def main(output_dir, dataset, model_invertible, model_discrete,
     kwargs = state['hyper_parameters']
     kwargs.update({'model_discrete': model_discrete, 'val_disp_min': val_disp_min, 'val_disp_max': val_disp_max})
 
-    if model_invertible:
-        model = ZixelWrapper(**kwargs).cuda()
-    else:
-        model = FeedForward(**kwargs).cuda()
+    # if model_invertible:
+    #     model = ZixelWrapper(**kwargs).cuda()
+    # else:
+    model = FeedForward(**kwargs).cuda()
 
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
