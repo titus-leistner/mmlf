@@ -1,10 +1,9 @@
 import sys
 import os
-import time
 
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
-#from ..model.invertible import ZixelWrapper
+# from ..model.invertible import ZixelWrapper
 from ..model.ensamble import Ensamble
 from ..utils.dl import ModelSaver, reg_to_class, class_to_reg
 from ..model import loss
@@ -12,16 +11,6 @@ from ..model import loss
 import torch
 from torchvision import transforms
 import click
-
-time_prev = time.time()
-
-
-def timeit(action):
-    global time_prev
-    time_curr = time.time()
-
-    print(f'{(time_curr - time_prev) * 1000.0:.02f} ms for {action}.')
-    time_prev = time.time()
 
 
 @click.command()
@@ -161,10 +150,9 @@ def main(output_dir, **kwargs):
 
     while True:
         for data in trainloader:
-            timeit('getting data')
             # train
             h_views, v_views, i_views, d_views, center, gt, mask, index = data
-            timeit('unpacking data')
+            mask = mask.int()
 
             dims = 4
             if kwargs['model_cross']:
@@ -172,7 +160,6 @@ def main(output_dir, **kwargs):
             dims *= kwargs['model_views'] * 3
             gt_classes = reg_to_class(
                 gt, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
-            timeit('reg_to_class')
 
             h_views = h_views.cuda()
             v_views = v_views.cuda()
@@ -180,24 +167,19 @@ def main(output_dir, **kwargs):
             d_views = d_views.cuda()
             gt = gt.cuda()
             gt_classes = gt_classes.cuda()
-            timeit('cuda()')
 
             # no loss if no texture
-            mask = mask.int() * loss.create_mask_texture(
-                center, kwargs['model_radius'] * 2 + 1,
-                kwargs['train_mae_threshold']).int()
-            timeit('losscreate_mask_texture()')
+            # mask = mask.int() * loss.create_mask_texture(
+            #     center, kwargs['model_radius'] * 2 + 1,
+            #     kwargs['train_mae_threshold']).int()
 
             mask = mask.cuda()
-            timeit('mask.cuda()')
 
             if kwargs['train_loss_padding'] is not None:
                 mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
 
             model.train()
-            timeit('model.train()')
             optimizer.zero_grad()
-            timeit('optimizer.zero_grad()')
 
             output = model(h_views, v_views, i_views, d_views)
 
@@ -209,12 +191,9 @@ def main(output_dir, **kwargs):
                 loss_train = loss_invertible_fn(output, gt_classes, None)
             else:
                 loss_train = loss_fn(output, gt, mask)
-            timeit('loss')
 
             loss_train.backward()
-            timeit('loss_train.backward()')
             optimizer.step()
-            timeit('optimizer.step()')
 
             if i % kwargs['val_interval'] == 0:
                 # validate
@@ -276,7 +255,6 @@ def main(output_dir, **kwargs):
             output = f'{i:>7}, {loss_train:.8f}, {loss_val_avg:.8f}, {mse_avg:.8f}, {bad_pix_avg:.8f}'
             print(output)
             print(output, file=log, flush=True)
-            timeit('output')
 
             i += 1
 
