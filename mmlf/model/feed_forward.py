@@ -7,6 +7,8 @@ from ..utils.dl import class_to_reg
 
 
 def laplacian(x, mu, b):
+    mu = mu.unsqueeze(1)
+    b = b.unsqueeze(1)
     return 1.0 / (2.0 * b) * torch.exp(-torch.abs(x - mu) / b)
 
 
