@@ -217,7 +217,7 @@ class HCI4D:
         if not os.path.exists(fname):
             mask = np.ones_like(gt, dtype=np.int)
         else:
-            mask = (skimage.img_as_int(skimage.io.imread(fname))[:, :, 0] > 0).as_type(np.int)
+            mask = (skimage.img_as_int(skimage.io.imread(fname))[:, :, 0] > 0)
 
         # compute texture mask
         # no loss if no texture
