@@ -26,40 +26,6 @@ def create_mask_margin(shape, margin=0):
     return mask
 
 
-def create_mask_texture(center, wsize, threshold):
-    """
-    Create a mask with False values for each pixel with a mean L1 distance to
-    all neighboring pixels in a rolling window lower than a given threshold
-
-    This implicitely adds a margin of wsize // 2 to the mask
-
-    :param center: the center view
-    :type center: torch.Tensor
-
-    :param wsize: the window size
-    :type wsize: int
-
-    :param threshold: mean L1 threshold
-    :type threshold: float
-    """
-    b, w, h = center.shape[0], center.shape[-1], center.shape[-2]
-
-    # unfold and reshape to image
-    mask = nn.functional.unfold(center, kernel_size=wsize, padding=wsize//2)
-    mask = mask.view(b, 3, -1, h, w)
-
-    # subtract the center pixel and compute the MAE
-    mask = torch.abs(mask - center.unsqueeze(2)).mean((1, 2))
-
-    # apply the threshold
-    mask = mask >= threshold
-
-    # also mask the boundary
-    mask = (mask.int() * create_mask_margin(mask.shape, wsize//2).int())
-
-    return mask
-
-
 class MaskedL1Loss(nn.Module):
     """
     Apply L1 loss only to some pixels given by a mask
