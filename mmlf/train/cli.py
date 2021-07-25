@@ -40,6 +40,7 @@ import click
 @click.option('--train_max_downscale', default=4, help='Maximum factor of down scaling for data augmentation')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
 @click.option('--train_loss_padding', default=None, type=float, help='Margin around ground truth to apply loss')
+@click.option('--train_shift', default=0, type=int, help='Static shift to apply to off-center training datasets')
 @click.option('--val_interval', default=100, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 @click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
@@ -48,8 +49,7 @@ import click
 @click.option('--val_disp_step', default=0.1, help='Disparity increment for ensamble')
 def main(output_dir, **kwargs):
     # compute radius
-    kwargs['model_radius'] = (kwargs['model_in_blocks'] +
-                              kwargs['model_out_blocks']) * \
+    kwargs['model_radius'] = (kwargs['model_in_blocks'] + kwargs['model_out_blocks']) * \
         ((kwargs['model_ksize'] + 1) // 2)
 
     # ensamble implies uncertainty
@@ -58,6 +58,7 @@ def main(output_dir, **kwargs):
 
     # initialize transforms
     transform = transforms.Compose([
+        hci4d.IntegerShift(kwargs['train_shift']),
         hci4d.RandomDownSampling(kwargs['train_max_downscale']),
         hci4d.RandomShift(2.0),
         hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
@@ -145,13 +146,13 @@ def main(output_dir, **kwargs):
         print(header, file=log)
 
     # model saver
-    # TODO: Enable only best
-    model_saver = ModelSaver(only_best=False)
+    model_saver = ModelSaver(only_best=True)
 
     while True:
         for data in trainloader:
             # train
             h_views, v_views, i_views, d_views, center, gt, mask, index = data
+
             dims = 4
             if kwargs['model_cross']:
                 dims = 2
@@ -174,8 +175,7 @@ def main(output_dir, **kwargs):
             mask = mask.cuda()
 
             if kwargs['train_loss_padding'] is not None:
-                mask = mask.int() * (torch.abs(gt) <
-                                     kwargs['train_loss_padding']).int()
+                mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
 
             model.train()
             optimizer.zero_grad()
