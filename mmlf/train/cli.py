@@ -40,7 +40,7 @@ import click
 @click.option('--train_max_downscale', default=4, help='Maximum factor of down scaling for data augmentation')
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
 @click.option('--train_loss_padding', default=None, type=float, help='Margin around ground truth to apply loss')
-@click.option('--train_shift', default=0, type=int, help='Static shift to apply to off-center training datasets')
+@click.option('--train_shift', default=0.0, type=float, help='Static shift to apply to off-center training datasets')
 @click.option('--val_interval', default=100, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 @click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
@@ -56,9 +56,10 @@ def main(output_dir, **kwargs):
     if kwargs['val_ensamble']:
         kwargs['model_uncert'] = True
 
+    print('train_shift', kwargs['train_shift'])
     # initialize transforms
     transform = transforms.Compose([
-        hci4d.IntegerShift(kwargs['train_shift']),
+        hci4d.Shift(kwargs['train_shift']),
         hci4d.RandomDownSampling(kwargs['train_max_downscale']),
         hci4d.RandomShift(2.0),
         hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
