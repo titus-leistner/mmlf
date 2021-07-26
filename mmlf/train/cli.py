@@ -173,6 +173,7 @@ def main(output_dir, **kwargs):
             d_views = d_views.cuda()
             gt = gt.cuda()
             gt_classes = gt_classes.cuda()
+            mpi = mpi.cuda()
 
             # no loss if no texture
             # mask = mask.int() * loss.create_mask_texture(
@@ -180,7 +181,6 @@ def main(output_dir, **kwargs):
             #     kwargs['train_mae_threshold']).int()
 
             mask = mask.cuda()
-
             if kwargs['train_loss_padding'] is not None:
                 mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
 
@@ -210,15 +210,20 @@ def main(output_dir, **kwargs):
                     mse_avg = 0.0
                     bad_pix_avg = 0.0
                     for j, data in enumerate(valloader):
-                        h_views, v_views, i_views, d_views, center, gt, _, index = data
+                        h_views, v_views, i_views, d_views, center, gt, mpi, _, index = data
 
                         h_views = h_views.cuda()
                         v_views = v_views.cuda()
                         i_views = i_views.cuda()
                         d_views = d_views.cuda()
                         gt = gt.cuda()
+                        mpi = mpi.cuda()
                         mask = loss.create_mask_margin(
                             gt.shape, kwargs['val_loss_margin']).cuda()
+
+                        # TODO: remove
+
+                        # END
 
                         output = val_model(h_views, v_views, i_views, d_views)
 

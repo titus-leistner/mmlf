@@ -210,6 +210,19 @@ class HCI4D:
             gt = pfm.load(os.path.join(scene, pfms[0]))
             gt = np.flip(gt, 0).copy()
 
+        # load mpis if existent
+        mpi = np.zeros((gt.shape[0], gt.shape[1], 1, 5))
+        mpi[:, :, :, :] = np.NaN
+        if 'gt_mpi_lowres.npz' in files:
+            mpi = np.load(os.path.join(scene, 'gt_mpi_lowres.npz'))['mpi']
+        mpi = np.flip(mpi, 0).copy()
+        mpi = mpi.transpose((2, 3, 0, 1))
+
+        mpi[np.isnan(mpi)] = 0.0
+        if mpi.shape[0] > 12:
+            mpi = mpi[:12]
+
+        # set index
         index = np.atleast_1d(index)
 
         # load mask
@@ -223,7 +236,7 @@ class HCI4D:
         # no loss if no texture
         mask *= create_mask_texture(torch.from_numpy(center).unsqueeze(0), 23, 0.02).squeeze().int().numpy()
 
-        return h_views, v_views, i_views, d_views, center, gt, mask, index
+        return h_views, v_views, i_views, d_views, center, gt, mpi, mask, index
 
     def cache_scenes(self):
         """
@@ -323,7 +336,7 @@ class HCI4D:
             scene_dir = os.path.join(scenes, scene)
 
             # get scene images
-            h_views, v_views, i_views, d_views, center, gt, mask, _ = self.__getitem__(i)
+            h_views, v_views, i_views, d_views, center, gt, mpi, mask, _ = self.__getitem__(i)
 
             lf.save_views(scene_dir, h_views, v_views, i_views, d_views)
             dl.save_img(os.path.join(scene_dir, 'center.png'), center)
@@ -401,7 +414,7 @@ class Zoom:
         """
         Rescale the lightfield data.
 
-        :param data: Sequence containing (h_views, v_views, center, gt, index)
+        :param data: Sequence containing (h_views, v_views, center, gt, mpi, mask, index)
                      or any other sequence of images or image stacks
         :type data: tuple
 
@@ -421,6 +434,9 @@ class Zoom:
         # correct ground truth
         if len(data) > 5:
             data[5] *= float(self.factor)
+
+        if len(data) > 6:
+            data[6][:, 4, :, :] *= float(self.factor)
 
         return tuple(data)
 
@@ -471,6 +487,9 @@ class DownSampling:
         # correct ground truth
         if len(data) > 5:
             data[5] /= float(self.factor)
+
+        if len(data) > 6:
+            data[6][:, 4, :, :] /= float(self.factor)
 
         return tuple(data)
 
@@ -850,6 +869,9 @@ class IntegerShift:
         if len(data) > 5:
             data[5] -= float(self.disp)
 
+        if len(data) > 6:
+            data[6][:, 4, :, :] -= float(self.disp)
+
         return tuple(data)
 
 
@@ -946,6 +968,9 @@ class Shift:
         if len(data) > 5:
             data[5] -= float(self.disp)
 
+        if len(data) > 6:
+            data[6][:, 4, :, :] -= float(self.disp)
+
         return tuple(data)
 
 
@@ -980,6 +1005,7 @@ class RandomShift:
         """
         # shift randomly
         disp = random.uniform(self.disp_range[0], self.disp_range[1])
+        print(f'Random Disp: {disp}')
 
         shift = Shift(disp)
         data = shift(data)

@@ -80,7 +80,7 @@ def main(output_dir, dataset, model_invertible, model_discrete,
             print(f'Processing scene {i}...')
             t_start = time.time()
 
-            h_views, v_views, i_views, d_views, center, gt, _, index = data
+            h_views, v_views, i_views, d_views, center, gt, mpi, _, index = data
             h_views = h_views.cuda()
             v_views = v_views.cuda()
             i_views = i_views.cuda()
