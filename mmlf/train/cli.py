@@ -58,8 +58,7 @@ def main(output_dir, **kwargs):
 
     print('train_shift', kwargs['train_shift'])
     # initialize transforms
-    transform = transforms.Compose([
-        hci4d.Shift(kwargs['train_shift']),
+    transform = [
         hci4d.RandomDownSampling(kwargs['train_max_downscale']),
         hci4d.RandomShift(2.0),
         hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
@@ -68,7 +67,13 @@ def main(output_dir, **kwargs):
         hci4d.RedistColor(),
         hci4d.Brightness(),
         hci4d.Contrast()
-    ])
+    ]
+
+    if kwargs['train_shift'] != 0.0:
+        transform = [hci4d.Shift(kwargs['train_shift'])] + transform
+    print(transform)
+
+    transform = transforms.Compose(transform)
 
     # load datasets
     trainset = hci4d.HCI4D(
