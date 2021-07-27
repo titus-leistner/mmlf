@@ -42,6 +42,29 @@ class MaskedL1Loss(nn.Module):
         return diff.sum() / count
 
 
+class MultiMaskedL1Loss(nn.Module):
+    """
+    Apply L1 loss only to some pixels given by a mask
+    """
+
+    def __init__(self):
+        super(MultiMaskedL1Loss, self).__init__()
+
+    def forward(self, input, target, mask):
+        weights = target[:, :, 3, :, :]
+        targets = target[:, :, 4, :, :]
+        diff = torch.abs(input['mean'].unsqueeze(1) - targets)
+        diff *= weights
+        diff = torch.sum(diff, dim=1)
+
+        diff = torch.flatten(diff)
+
+        count = mask.int().sum()
+        diff *= torch.flatten(mask).float()
+
+        return diff.sum() / count
+
+
 class MaskedMSELoss(nn.Module):
     """
     Apply MSE loss only to some pixels given by a mask
@@ -56,6 +79,18 @@ class MaskedMSELoss(nn.Module):
         diff *= torch.flatten(mask).float()
 
         return diff.sum() / count
+
+
+class MultiMaskedMSELoss(nn.Module):
+    """
+    Apply MSE loss only to some pixels given by a mask
+    """
+
+    def __init__(self):
+        super(MultiMaskedMSELoss, self).__init__()
+
+    def forward(self, input, target, mask):
+        raise NotImplementedError()
 
 
 class MaskedCrossEntropy(nn.Module):
@@ -129,6 +164,18 @@ class UncertaintyMSELoss(nn.Module):
         return loss.sum() / count
 
 
+class MultiUncertaintyMSELoss(nn.Module):
+    """
+    Apply an MSE loss with uncertainty introduced by Kendall and Gal
+    """
+
+    def __init__(self):
+        super(MultiUncertaintyMSELoss, self).__init__()
+
+    def forward(self, input, target, mask):
+        raise NotImplementedError()
+
+
 class UncertaintyL1Loss(nn.Module):
     """
     Apply an L1 loss with uncertainty
@@ -141,6 +188,34 @@ class UncertaintyL1Loss(nn.Module):
         # compute loss with uncertainty
         loss = torch.exp(-input['logvar']) * \
             torch.abs(input['mean'] - target)
+
+        # add uncertainty
+        loss += input['logvar']
+
+        # multiply with mask
+        count = mask.int().sum()
+        loss *= mask.float()
+
+        return loss.sum() / count
+
+
+class MultiUncertaintyL1Loss(nn.Module):
+    """
+    Apply an L1 loss with uncertainty
+    """
+
+    def __init__(self):
+        super(MultiUncertaintyL1Loss, self).__init__()
+
+    def forward(self, input, target, mask):
+        # compute loss with uncertainty
+        weights = target[:, :, 3, :, :]
+        targets = target[:, :, 4, :, :]
+
+        loss = torch.exp(-input['logvar']).unsqueeze(1) * \
+            torch.abs(input['mean'].unsqueeze(1) - targets)
+        loss *= weights
+        loss = torch.sum(weights, dim=1)
 
         # add uncertainty
         loss += input['logvar']

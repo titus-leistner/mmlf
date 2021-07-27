@@ -131,6 +131,32 @@ def reg_to_class(arr, start, stop, n_steps):
     return result
 
 
+def mpi_to_weights(arr, start, stop, n_steps):
+    """
+    Convert tensor of continuous numbers to weighted more-hot-encoding
+
+    :param arr: input tensor/array
+    :type arr: torch.tensor
+
+    :param start: lower bound of valid range
+    :type start: float
+
+    :param stop: upper bound of valid range
+    :type stop: float
+
+    :param: n_steps: number of classes
+    :type: n_steps: int
+    """
+    step = (stop - start) / n_steps
+    result = torch.linspace(start, stop, n_steps).view((1, -1, 1, 1)).unsqueeze(2)
+    weights = arr[:, :, 3].unsqueeze(1)
+    arr = arr[:, :, 4].unsqueeze(1)
+    result = (torch.abs(result - arr) < step / 2.0).float() * weights
+    result = result.sum(2)
+
+    return result
+
+
 def class_to_reg(arr, start, stop, n_steps):
     """
     Convert tensor of discrete one-hot-encodings to continuous regressions
@@ -189,7 +215,7 @@ class BatchIter:
         for i in range(b):
             net_args = []
             for arg in args:
-                net_args.append(arg[i:i+1])
+                net_args.append(arg[i:i + 1])
 
             results.append(self.net(*net_args))
 

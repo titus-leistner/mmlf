@@ -211,18 +211,21 @@ class HCI4D:
             gt = np.flip(gt, 0).copy()
 
         # load mpis if existent
-        mpi = np.zeros((gt.shape[0], gt.shape[1], 1, 5))
-        mpi[:, :, :, :] = np.NaN
         if 'gt_mpi_lowres.npz' in files:
             mpi = np.load(os.path.join(scene, 'gt_mpi_lowres.npz'))['mpi']
-        mpi = np.flip(mpi, 0).copy()
-        mpi = mpi.transpose((2, 3, 0, 1))
+            mpi = np.flip(mpi, 0).copy()
+            mpi = mpi.transpose((2, 3, 0, 1))
+            mpi[np.isnan(mpi)] = 0.0
+            if mpi.shape[0] > 12:
+                mpi = mpi[:12]
+        else:
+            # create one plane MPI from center view and ground truth
+            mpi = np.zeros((1, 5, gt.shape[0], gt.shape[1]))
+            mpi[0, :3, :, :] = center
+            mpi[0, 3, :, :] = 1.0
+            mpi[0, 4, :, :] = gt
 
-        mpi[np.isnan(mpi)] = 0.0
-        if mpi.shape[0] > 12:
-            mpi = mpi[:12]
-
-        # set index
+            # set index
         index = np.atleast_1d(index)
 
         # load mask
@@ -1005,7 +1008,6 @@ class RandomShift:
         """
         # shift randomly
         disp = random.uniform(self.disp_range[0], self.disp_range[1])
-        print(f'Random Disp: {disp}')
 
         shift = Shift(disp)
         data = shift(data)

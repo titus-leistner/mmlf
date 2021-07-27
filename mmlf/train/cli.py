@@ -5,7 +5,7 @@ from ..data import hci4d
 from ..model.feed_forward import FeedForward
 # from ..model.invertible import ZixelWrapper
 from ..model.ensamble import Ensamble
-from ..utils.dl import ModelSaver, reg_to_class, class_to_reg
+from ..utils.dl import ModelSaver, reg_to_class, class_to_reg, mpi_to_weights
 from ..model import loss
 
 import torch
@@ -41,6 +41,8 @@ import click
 @click.option('--train_resume', is_flag=True, help='Resume training from old checkpoint?')
 @click.option('--train_loss_padding', default=None, type=float, help='Margin around ground truth to apply loss')
 @click.option('--train_shift', default=0.0, type=float, help='Static shift to apply to off-center training datasets')
+@click.option('--train_loss_multimodal', is_flag=True, help='Use multimodal training loss?')
+@click.option('--train_loss_strongest', is_flag=True, help='Use strongest depth instead of nearest?')
 @click.option('--val_interval', default=100, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 @click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
@@ -48,6 +50,8 @@ import click
 @click.option('--val_disp_max', default=3.5, help='Maximum disparity of dataset')
 @click.option('--val_disp_step', default=0.1, help='Disparity increment for ensamble')
 def main(output_dir, **kwargs):
+    assert kwargs['train_loss_strongest'] != kwargs['train_loss_multimodal']
+
     # compute radius
     kwargs['model_radius'] = (kwargs['model_in_blocks'] + kwargs['model_out_blocks']) * \
         ((kwargs['model_ksize'] + 1) // 2)
@@ -56,7 +60,6 @@ def main(output_dir, **kwargs):
     if kwargs['val_ensamble']:
         kwargs['model_uncert'] = True
 
-    print('train_shift', kwargs['train_shift'])
     # initialize transforms
     transform = [
         hci4d.RandomDownSampling(kwargs['train_max_downscale']),
@@ -71,7 +74,6 @@ def main(output_dir, **kwargs):
 
     if kwargs['train_shift'] != 0.0:
         transform = [hci4d.Shift(kwargs['train_shift'])] + transform
-    print(transform)
 
     transform = transforms.Compose(transform)
 
@@ -101,10 +103,17 @@ def main(output_dir, **kwargs):
         optimizer = torch.optim.RMSprop(
             model.parameters(), lr=kwargs['train_lr'])
 
-    loss_fn = loss.MaskedL1Loss()
-    loss_uncert_fn = loss.UncertaintyL1Loss()
-    loss_discrete_fn = loss.MaskedCrossEntropy()
-    loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
+    if kwargs['train_loss_multimodal']:
+        loss_fn = loss.MultiMaskedL1Loss()
+        loss_uncert_fn = loss.MultiUncertaintyL1Loss()
+        loss_discrete_fn = loss.MaskedCrossEntropy()
+
+    else:
+        loss_fn = loss.MaskedL1Loss()
+        loss_uncert_fn = loss.UncertaintyL1Loss()
+        loss_discrete_fn = loss.MaskedCrossEntropy()
+        # loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
+
     mse_fn = loss.MaskedMSELoss()
     bad_pix_fn = loss.MaskedBadPix()
 
@@ -157,15 +166,27 @@ def main(output_dir, **kwargs):
     while True:
         for data in trainloader:
             # train
-            h_views, v_views, i_views, d_views, center, gt, mask, index = data
+            h_views, v_views, i_views, d_views, center, gt, mpi, mask, index = data
+
+            if kwargs['train_loss_strongest']:
+                inds = torch.max(mpi[:, :, 3, :, :], dim=1)[1].unsqueeze(1)
+                gt = torch.gather(mpi[:, :, 4, :, :], dim=1, index=inds).squeeze()
+
+            if kwargs['train_loss_multimodal']:
+                gt = mpi
+
             mask = mask.int()
 
             dims = 4
             if kwargs['model_cross']:
                 dims = 2
             dims *= kwargs['model_views'] * 3
-            gt_classes = reg_to_class(
-                gt, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
+
+            if kwargs['train_loss_multimodal']:
+                gt_classes = mpi_to_weights(mpi, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
+            else:
+                gt_classes = reg_to_class(
+                    gt, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
 
             h_views = h_views.cuda()
             v_views = v_views.cuda()
@@ -182,7 +203,10 @@ def main(output_dir, **kwargs):
 
             mask = mask.cuda()
             if kwargs['train_loss_padding'] is not None:
-                mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
+                if kwargs['train_loss_multimodal']:
+                    mpi[:, :, 3, :, :] *= (torch.abs(mpi[:, :, 4, :, :]) < kwargs['train_loss_padding']).float()
+                else:
+                    mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
 
             model.train()
             optimizer.zero_grad()
@@ -194,7 +218,8 @@ def main(output_dir, **kwargs):
             elif kwargs['model_discrete']:
                 loss_train = loss_discrete_fn(output, gt_classes, mask)
             elif kwargs['model_invertible']:
-                loss_train = loss_invertible_fn(output, gt_classes, None)
+                raise NotImplementedError('INNs are not supported anymore')
+                # loss_train = loss_invertible_fn(output, gt_classes, None)
             else:
                 loss_train = loss_fn(output, gt, mask)
 
@@ -221,16 +246,18 @@ def main(output_dir, **kwargs):
                         mask = loss.create_mask_margin(
                             gt.shape, kwargs['val_loss_margin']).cuda()
 
-                        # TODO: remove
-
-                        # END
-
                         output = val_model(h_views, v_views, i_views, d_views)
 
                         if kwargs['model_uncert']:
-                            loss_val = loss_uncert_fn(output, gt, mask)
+                            if kwargs['train_loss_multimodal']:
+                                loss_val = loss_uncert_fn(output, mpi, mask)
+                            else:
+                                loss_val = loss_uncert_fn(output, gt, mask)
                         else:
-                            loss_val = loss_fn(output, gt, mask)
+                            if kwargs['train_loss_multimodal']:
+                                loss_val = loss_fn(output, mpi, mask)
+                            else:
+                                loss_val = loss_fn(output, gt, mask)
 
                         loss_val_avg += loss_val.item()
 
