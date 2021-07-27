@@ -113,7 +113,6 @@ class MaskedCrossEntropy(nn.Module):
         count = mask.float().sum()
         loss *= mask.float()
 
-        print('output loss:', loss.sum().item())
         return loss.sum() / count
 
 

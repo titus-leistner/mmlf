@@ -114,8 +114,10 @@ class FeedForward(nn.Module):
         layers = [
             nn.Conv2d(ch_in, ch_out, self.ksize, padding=self.padding1),
             nn.ReLU(),
-            nn.Conv2d(ch_out, ch_out, self.ksize, padding=self.padding2),
+            nn.Conv2d(ch_out, ch_out, self.ksize, padding=self.padding2)
         ]
+        nn.init.kaiming_normal_(layers[0].weight)
+        nn.init.kaiming_normal_(layers[2].weight)
 
         if out_bn_relu:
             layers.append(nn.BatchNorm2d(ch_out))

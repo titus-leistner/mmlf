@@ -50,7 +50,7 @@ import click
 @click.option('--val_disp_max', default=3.5, help='Maximum disparity of dataset')
 @click.option('--val_disp_step', default=0.1, help='Disparity increment for ensamble')
 def main(output_dir, **kwargs):
-    assert kwargs['train_loss_strongest'] != kwargs['train_loss_multimodal']
+    assert not (kwargs['train_loss_strongest'] and kwargs['train_loss_multimodal'])
 
     # compute radius
     kwargs['model_radius'] = (kwargs['model_in_blocks'] + kwargs['model_out_blocks']) * \
@@ -196,11 +196,6 @@ def main(output_dir, **kwargs):
             gt_classes = gt_classes.cuda()
             mpi = mpi.cuda()
 
-            # no loss if no texture
-            # mask = mask.int() * loss.create_mask_texture(
-            #     center, kwargs['model_radius'] * 2 + 1,
-            #     kwargs['train_mae_threshold']).int()
-
             mask = mask.cuda()
             if kwargs['train_loss_padding'] is not None:
                 if kwargs['train_loss_multimodal']:
@@ -226,7 +221,10 @@ def main(output_dir, **kwargs):
             loss_train.backward()
             optimizer.step()
 
-            if i % kwargs['val_interval'] == 0:
+            loss_val_avg = 0.0
+            mse_avg = 0.0
+            bad_pix_avg = 0.0
+            if i % kwargs['val_interval'] == 0 and i > 0:
                 # validate
                 with torch.no_grad():
                     model.eval()
