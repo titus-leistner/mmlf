@@ -225,7 +225,7 @@ def main(output_dir, **kwargs):
             loss_val_avg = 0.0
             mse_avg = 0.0
             bad_pix_avg = 0.0
-            if i % kwargs['val_interval'] == 0:  # and i > 0:
+            if i % kwargs['val_interval'] == 0 and i > 0:
                 # validate
                 with torch.no_grad():
                     model.eval()

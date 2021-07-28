@@ -35,6 +35,10 @@ class MaskedL1Loss(nn.Module):
         super(MaskedL1Loss, self).__init__()
 
     def forward(self, input, target, mask):
+        print(torch.min(input['mean']).item(), torch.max(input['mean']).item())
+
+        print('-/+: ', (torch.sum(input['mean'] < 0.0) / (torch.sum(input['mean'] > 0.0).float() + 1e-12)).item())
+
         diff = torch.abs(torch.flatten(input['mean']) - torch.flatten(target))
         count = mask.int().sum()
         diff *= torch.flatten(mask).float()
