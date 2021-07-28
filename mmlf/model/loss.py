@@ -33,11 +33,39 @@ class MaskedL1Loss(nn.Module):
 
     def __init__(self):
         super(MaskedL1Loss, self).__init__()
+        self.in_lz = 0
+        self.in_gz = 0
+        self.in_mean = 0.0
+
+        self.gt_lz = 0
+        self.gt_gz = 0
+        self.gt_mean = 0.0
+
+        self.count = 0
 
     def forward(self, input, target, mask):
-        print(torch.min(input['mean']).item(), torch.max(input['mean']).item())
+        # from ..utils.dl import save_img
+        # save_img('out/pred.png', input['mean'][0])
+        # save_img('out/mask.png', mask[0].float())
 
-        print('-/+: ', (torch.sum(input['mean'] < 0.0) / (torch.sum(input['mean'] > 0.0).float() + 1e-12)).item())
+        self.count += 1
+        print('in:  ', torch.min(input['mean']).item(), torch.max(input['mean']).item())
+        print('inm: ', torch.min(input['mean'] * mask).item(), torch.max(input['mean'] * mask).item())
+        self.in_lz += (torch.sum(input['mean'] < 0.0)).item()
+        self.in_gz += (torch.sum(input['mean'] > 0.0)).item()
+        self.in_mean += torch.mean(input['mean']).item()
+        print('mn:  ', self.in_mean / (self.count + 1e-12))
+        print('-/+: ', self.in_lz / (self.in_gz + 1e-12))
+        print()
+
+        print('gt:  ', torch.min(target).item(), torch.max(target).item())
+        print('gtm: ', torch.min(target * mask).item(), torch.max(target * mask).item())
+        self.gt_lz += (torch.sum(target < 0.0)).item()
+        self.gt_gz += (torch.sum(target > 0.0)).item()
+        self.gt_mean += torch.mean(target).item()
+        print('mn:  ', self.gt_mean / (self.count + 1e-12))
+        print('-/+: ', self.gt_lz / (self.gt_gz + 1e-12))
+        print()
 
         diff = torch.abs(torch.flatten(input['mean']) - torch.flatten(target))
         count = mask.int().sum()

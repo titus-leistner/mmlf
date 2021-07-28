@@ -100,7 +100,7 @@ def main(output_dir, **kwargs):
         optimizer = torch.optim.Adam(
             model.parameters(), lr=kwargs['train_lr'])
     else:
-        optimizer = torch.optim.RMSprop(
+        optimizer = torch.optim.Adam(
             model.parameters(), lr=kwargs['train_lr'])
 
     if kwargs['train_loss_multimodal']:
@@ -175,7 +175,7 @@ def main(output_dir, **kwargs):
             if kwargs['train_loss_multimodal']:
                 gt = mpi
 
-            mask = mask.int()
+            mask = mask.int() * loss.create_mask_margin(mask.shape, 11)
 
             dims = 4
             if kwargs['model_cross']:

@@ -116,8 +116,10 @@ class FeedForward(nn.Module):
             nn.ReLU(),
             nn.Conv2d(ch_out, ch_out, self.ksize, padding=self.padding2)
         ]
-        nn.init.kaiming_normal_(layers[0].weight)
-        nn.init.kaiming_normal_(layers[2].weight)
+        nn.init.xavier_normal_(layers[0].weight)
+        nn.init.xavier_normal_(layers[2].weight)
+        nn.init.zeros_(layers[0].bias)
+        nn.init.zeros_(layers[2].bias)
 
         if out_bn_relu:
             layers.append(nn.BatchNorm2d(ch_out))
