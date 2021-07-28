@@ -182,18 +182,19 @@ def main(output_dir, **kwargs):
                 dims = 2
             dims *= kwargs['model_views'] * 3
 
-            if kwargs['train_loss_multimodal']:
-                gt_classes = mpi_to_weights(mpi, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
-            else:
-                gt_classes = reg_to_class(
-                    gt, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
+            if kwargs['model_discrete']:
+                if kwargs['train_loss_multimodal']:
+                    gt_classes = mpi_to_weights(mpi, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
+                else:
+                    gt_classes = reg_to_class(
+                        gt, kwargs['val_disp_min'], kwargs['val_disp_max'], dims)
+                gt_classes = gt_classes.cuda()
 
             h_views = h_views.cuda()
             v_views = v_views.cuda()
             i_views = i_views.cuda()
             d_views = d_views.cuda()
             gt = gt.cuda()
-            gt_classes = gt_classes.cuda()
             mpi = mpi.cuda()
 
             mask = mask.cuda()
@@ -224,7 +225,7 @@ def main(output_dir, **kwargs):
             loss_val_avg = 0.0
             mse_avg = 0.0
             bad_pix_avg = 0.0
-            if i % kwargs['val_interval'] == 0 and i > 0:
+            if i % kwargs['val_interval'] == 0:  # and i > 0:
                 # validate
                 with torch.no_grad():
                     model.eval()
