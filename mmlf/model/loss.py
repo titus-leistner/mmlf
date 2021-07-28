@@ -39,6 +39,9 @@ class MaskedL1Loss(nn.Module):
         count = mask.int().sum()
         diff *= torch.flatten(mask).float()
 
+        if count == 0:
+            return diff.sum()
+
         return diff.sum() / count
 
 
@@ -62,6 +65,9 @@ class MultiMaskedL1Loss(nn.Module):
         count = mask.int().sum()
         diff *= torch.flatten(mask).float()
 
+        if count == 0:
+            return diff.sum()
+
         return diff.sum() / count
 
 
@@ -77,6 +83,9 @@ class MaskedMSELoss(nn.Module):
         diff = (torch.flatten(input['mean']) - torch.flatten(target)) ** 2.0
         count = mask.int().sum()
         diff *= torch.flatten(mask).float()
+
+        if count == 0:
+            return diff.sum()
 
         return diff.sum() / count
 
@@ -113,6 +122,9 @@ class MaskedCrossEntropy(nn.Module):
         count = mask.float().sum()
         loss *= mask.float()
 
+        if count == 0:
+            return loss.sum()
+
         return loss.sum() / count
 
 
@@ -137,6 +149,9 @@ class MaskedBadPix(nn.Module):
 
         diff = diff.int() * torch.flatten(mask).int()
 
+        if count == 0:
+            return diff.sum()
+
         return diff.sum().float() / count
 
 
@@ -159,6 +174,9 @@ class UncertaintyMSELoss(nn.Module):
         # multiply with mask
         count = mask.int().sum()
         loss *= mask.float()
+
+        if count == 0:
+            return loss.sum()
 
         return loss.sum() / count
 
@@ -195,6 +213,9 @@ class UncertaintyL1Loss(nn.Module):
         count = mask.int().sum()
         loss *= mask.float()
 
+        if count == 0:
+            return loss.sum()
+
         return loss.sum() / count
 
 
@@ -222,6 +243,9 @@ class MultiUncertaintyL1Loss(nn.Module):
         # multiply with mask
         count = mask.int().sum()
         loss *= mask.float()
+
+        if count == 0:
+            return loss.sum()
 
         return loss.sum() / count
 
