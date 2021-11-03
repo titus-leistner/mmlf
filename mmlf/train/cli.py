@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 
 from ..data import hci4d
 from ..model.feed_forward import FeedForward
@@ -29,8 +30,11 @@ import click
 @click.option('--model_act_norm', default=0.7, help='Activation normalization for coupling block?')
 @click.option('--model_act_norm_type', default='SOFTPLUS', help='Type of activation normalization for coupling block?')
 @click.option('--model_soft_permutation', is_flag=True, help='Use soft permuation for coupling block?')
+@click.option('--model_no_batchnorm', is_flag=True, help='Disable BatchNorm layers')
+@click.option('--model_batchnorm_momentum', default=0.1, help='Momentum for BatchNorm layers')
 @click.option('--train_trainset', default='../lf-dataset/additional', help='Location of training dataset')
 @click.option('--train_valset', default='../lf-dataset/training', help='Location of validation dataset')
+@click.option('--train_no_data_augment', is_flag=True, help='Don\'t use any data augmentation?')
 @click.option('--train_num_workers', default=4, help='Number of workors for data loader')
 @click.option('--train_lr', default=1e-5, help='Learning rate')
 @click.option('--train_bs', default=1, help='Batch size')
@@ -43,6 +47,9 @@ import click
 @click.option('--train_shift', default=0.0, type=float, help='Static shift to apply to off-center training datasets')
 @click.option('--train_loss_multimodal', is_flag=True, help='Use multimodal training loss?')
 @click.option('--train_loss_strongest', is_flag=True, help='Use strongest depth instead of nearest?')
+@click.option('--train_eval_mode', is_flag=True, help='Also train in eval mode?')
+@click.option('--train_eval_mode_start', default=0, help='Start iteration for eval mode')
+@click.option('--train_warm_start', is_flag=True, help='Use lower learning rate during initial iterations?')
 @click.option('--val_interval', default=100, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 @click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
@@ -61,16 +68,22 @@ def main(output_dir, **kwargs):
         kwargs['model_uncert'] = True
 
     # initialize transforms
-    transform = [
-        hci4d.RandomDownSampling(kwargs['train_max_downscale']),
-        hci4d.RandomShift(2.0),
-        hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
-        hci4d.CenterCrop(kwargs['train_ps']),
-        hci4d.RandomRotate(),
-        hci4d.RedistColor(),
-        hci4d.Brightness(),
-        hci4d.Contrast()
-    ]
+    if kwargs['train_no_data_augment']:
+        transform = [
+            hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
+            hci4d.CenterCrop(kwargs['train_ps'])
+        ]
+    else:
+        transform = [
+            hci4d.RandomDownSampling(kwargs['train_max_downscale']),
+            hci4d.RandomShift(1.0),
+            hci4d.RandomCrop(kwargs['train_ps'] + 2 * 4 * 2),
+            hci4d.CenterCrop(kwargs['train_ps']),
+            hci4d.RandomRotate(),
+            hci4d.RedistColor(),
+            hci4d.Brightness(),
+            hci4d.Contrast()
+        ]
 
     if kwargs['train_shift'] != 0.0:
         transform = [hci4d.Shift(kwargs['train_shift'])] + transform
@@ -155,7 +168,7 @@ def main(output_dir, **kwargs):
     log = open(os.path.join(output_dir, 'log.csv'), mode)
 
     # output header
-    header = f'{"iter":>7}, loss_train,   loss_val,        mse, badpix_007'
+    header = f'{"iter":>7}, loss_train,   loss_val,        mse, badpix_007, time_elapsed'
     print(header)
     if not kwargs['train_resume']:
         print(header, file=log)
@@ -163,6 +176,11 @@ def main(output_dir, **kwargs):
     # model saver
     model_saver = ModelSaver(only_best=True)
 
+    loss_val_avg = 0.0
+    mse_avg = 0.0
+    bad_pix_avg = 0.0
+
+    time_start = 0
     while True:
         for data in trainloader:
             # train
@@ -204,7 +222,17 @@ def main(output_dir, **kwargs):
                 else:
                     mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
 
-            model.train()
+            if kwargs['train_eval_mode'] and i >= kwargs['train_eval_mode_start']:
+                model.eval()
+            else:
+                model.train()
+
+            # warm start
+            if kwargs['train_warm_start']:
+                if i <= 1000:
+                    for g in optimizer.param_groups:
+                        g['lr'] = kwargs['train_lr'] * float(i) / 1000.0
+
             optimizer.zero_grad()
 
             output = model(h_views, v_views, i_views, d_views)
@@ -222,10 +250,14 @@ def main(output_dir, **kwargs):
             loss_train.backward()
             optimizer.step()
 
-            loss_val_avg = 0.0
-            mse_avg = 0.0
-            bad_pix_avg = 0.0
-            if i % kwargs['val_interval'] == 0 and i > 0:
+            time_elap = time.time() - time_start
+
+            # TODO: remove
+            # from mmlf.utils import pfm
+            # res_out = output['mean'].detach().cpu().numpy()[0]
+            # pfm.save(f'test/{i:06d}_res.pfm', res_out)
+
+            if i % kwargs['val_interval'] == 0:  # and i > 0:
                 # validate
                 with torch.no_grad():
                     model.eval()
@@ -289,11 +321,12 @@ def main(output_dir, **kwargs):
                                 model, optimizer, kwargs, None, i,
                                 loss_val_avg, **save_additional)
 
-            output = f'{i:>7}, {loss_train:.8f}, {loss_val_avg:.8f}, {mse_avg:.8f}, {bad_pix_avg:.8f}'
+            output = f'{i:>7}, {loss_train:.8f}, {loss_val_avg:.8f}, {mse_avg:.8f}, {bad_pix_avg:.8f}, {time_elap:.8f}'
             print(output)
             print(output, file=log, flush=True)
 
             i += 1
+            time_start = time.time()
 
 
 if __name__ == '__main__':

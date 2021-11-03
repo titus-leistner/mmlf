@@ -48,24 +48,24 @@ class MaskedL1Loss(nn.Module):
         # save_img('out/pred.png', input['mean'][0])
         # save_img('out/mask.png', mask[0].float())
 
-        self.count += 1
-        print('in:  ', torch.min(input['mean']).item(), torch.max(input['mean']).item())
-        print('inm: ', torch.min(input['mean'] * mask).item(), torch.max(input['mean'] * mask).item())
-        self.in_lz += (torch.sum(input['mean'] < 0.0)).item()
-        self.in_gz += (torch.sum(input['mean'] > 0.0)).item()
-        self.in_mean += torch.mean(input['mean']).item()
-        print('mn:  ', self.in_mean / (self.count + 1e-12))
-        print('-/+: ', self.in_lz / (self.in_gz + 1e-12))
-        print()
+        # self.count += 1
+        # print('in:  ', torch.min(input['mean']).item(), torch.max(input['mean']).item())
+        # print('inm: ', torch.min(input['mean'] * mask).item(), torch.max(input['mean'] * mask).item())
+        # self.in_lz += (torch.sum(input['mean'] < 0.0)).item()
+        # self.in_gz += (torch.sum(input['mean'] > 0.0)).item()
+        # self.in_mean += torch.mean(input['mean']).item()
+        # print('mn:  ', self.in_mean / (self.count + 1e-12))
+        # print('-/+: ', self.in_lz / (self.in_gz + 1e-12))
+        # print()
 
-        print('gt:  ', torch.min(target).item(), torch.max(target).item())
-        print('gtm: ', torch.min(target * mask).item(), torch.max(target * mask).item())
-        self.gt_lz += (torch.sum(target < 0.0)).item()
-        self.gt_gz += (torch.sum(target > 0.0)).item()
-        self.gt_mean += torch.mean(target).item()
-        print('mn:  ', self.gt_mean / (self.count + 1e-12))
-        print('-/+: ', self.gt_lz / (self.gt_gz + 1e-12))
-        print()
+        # print('gt:  ', torch.min(target).item(), torch.max(target).item())
+        # print('gtm: ', torch.min(target * mask).item(), torch.max(target * mask).item())
+        # self.gt_lz += (torch.sum(target < 0.0)).item()
+        # self.gt_gz += (torch.sum(target > 0.0)).item()
+        # self.gt_mean += torch.mean(target).item()
+        # print('mn:  ', self.gt_mean / (self.count + 1e-12))
+        # print('-/+: ', self.gt_lz / (self.gt_gz + 1e-12))
+        # print()
 
         diff = torch.abs(torch.flatten(input['mean']) - torch.flatten(target))
         count = mask.int().sum()
@@ -302,9 +302,9 @@ class InformationBottleneckLoss(nn.Module):
         mu = input['mu']
         dists = input['dists']
 
-        print('mean dist:', torch.mean(dists).item())
-        print('mean absolute mu:', torch.mean(torch.abs(mu)).item())
-        print('mean absolute z:', torch.mean(torch.abs(zixels)).item())
+        # print('mean dist:', torch.mean(dists).item())
+        # print('mean absolute mu:', torch.mean(torch.abs(mu)).item())
+        # print('mean absolute z:', torch.mean(torch.abs(zixels)).item())
 
         w = zixels.shape[-1]
         h = zixels.shape[-2]
@@ -320,7 +320,7 @@ class InformationBottleneckLoss(nn.Module):
         nll = nll.mean()
         cat_ce = cat_ce.mean()
 
-        print(f'nll: {nll.item()}, cat_ce: {cat_ce.item()}')
+        # print(f'nll: {nll.item()}, cat_ce: {cat_ce.item()}')
 
         loss = self.beta_nll * nll + self.beta_cat_ce * cat_ce
 

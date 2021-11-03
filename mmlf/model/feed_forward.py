@@ -24,7 +24,7 @@ class FeedForward(nn.Module):
 
     def __init__(self, model_ksize, model_in_blocks, model_out_blocks,
                  model_chs, model_views, model_cross, model_uncert, model_unet,
-                 model_discrete, val_disp_min, val_disp_max, **kwargs):
+                 model_discrete, model_no_batchnorm, model_batchnorm_momentum, val_disp_min, val_disp_max, **kwargs):
         """
         :param model_ksize: kernel size
         :type model_ksize: int
@@ -53,6 +53,12 @@ class FeedForward(nn.Module):
         :param model_discrete: Discretize the output space?
         :type model_discrete: bool
 
+        :param model_no_batchnorm: Disable BatchNorm layers
+        :type model_discrete: bool
+
+        :param model_batchnorm_momentum: Momentum for BatchNorm layers
+        :type model_discrete: float
+
         :param val_disp_min: Minimum disparity in the data
         :type val_disp_min: bool
 
@@ -67,6 +73,8 @@ class FeedForward(nn.Module):
         self.cross = model_cross
         self.uncert = model_uncert
         self.discrete = model_discrete
+        self.no_batchnorm = model_no_batchnorm
+        self.batchnorm_momentum = model_batchnorm_momentum
 
         self.disp_min = val_disp_min
         self.disp_max = val_disp_max
@@ -116,13 +124,14 @@ class FeedForward(nn.Module):
             nn.ReLU(),
             nn.Conv2d(ch_out, ch_out, self.ksize, padding=self.padding2)
         ]
-        nn.init.xavier_normal_(layers[0].weight)
-        nn.init.xavier_normal_(layers[2].weight)
-        nn.init.zeros_(layers[0].bias)
-        nn.init.zeros_(layers[2].bias)
+        # nn.init.xavier_normal_(layers[0].weight)
+        # nn.init.xavier_normal_(layers[2].weight)
+        # nn.init.zeros_(layers[0].bias)
+        # nn.init.zeros_(layers[2].bias)
 
         if out_bn_relu:
-            layers.append(nn.BatchNorm2d(ch_out))
+            if not self.no_batchnorm:
+                layers.append(nn.BatchNorm2d(ch_out, momentum=self.batchnorm_momentum))
             layers.append(nn.ReLU())
 
         return nn.Sequential(*layers)

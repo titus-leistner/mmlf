@@ -344,6 +344,7 @@ class HCI4D:
             lf.save_views(scene_dir, h_views, v_views, i_views, d_views)
             dl.save_img(os.path.join(scene_dir, 'center.png'), center)
             dl.save_img(os.path.join(scene_dir, 'gt.png'), gt)
+            dl.save_img(os.path.join(scene_dir, 'diff.png'), np.abs(gt - result))
 
             # save ground truth, results, uncertainties and/or runtimes
             gt_out = np.flip(gt.copy(), 0)
