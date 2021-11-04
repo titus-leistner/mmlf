@@ -50,6 +50,7 @@ import click
 @click.option('--train_eval_mode', is_flag=True, help='Also train in eval mode?')
 @click.option('--train_eval_mode_start', default=0, help='Start iteration for eval mode')
 @click.option('--train_warm_start', is_flag=True, help='Use lower learning rate during initial iterations?')
+@click.option('--train_cooling', default=0, help='Cooling interval')
 @click.option('--val_interval', default=100, help='Validation interval')
 @click.option('--val_loss_margin', default=15, help='Margin around each image to omit for the validation loss.')
 @click.option('--val_ensamble', is_flag=True, help='Use a network ensamble?')
@@ -232,6 +233,11 @@ def main(output_dir, **kwargs):
                 if i <= 1000:
                     for g in optimizer.param_groups:
                         g['lr'] = kwargs['train_lr'] * float(i) / 1000.0
+
+            if kwargs['train_cooling'] > 0 and i >= kwargs['train_cooling']:
+                lr = kwargs['train_lr'] / (10.0 ** (i / kwargs['train_cooling'] - 1.0))
+                for g in optimizer.param_groups:
+                    g['lr'] = lr
 
             optimizer.zero_grad()
 
