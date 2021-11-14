@@ -266,11 +266,13 @@ class MultiUncertaintyL1Loss(nn.Module):
 
         loss = torch.exp(-input['logvar']).unsqueeze(1) * \
             torch.abs(input['mean'].unsqueeze(1) - targets)
-        loss *= weights
-        loss = torch.sum(weights, dim=1)
 
         # add uncertainty
-        loss += input['logvar']
+        loss += input['logvar'].unsqueeze(1)
+
+        # multiply weights and sum
+        loss *= weights
+        loss = torch.sum(loss, dim=1)
 
         # multiply with mask
         count = mask.int().sum()
