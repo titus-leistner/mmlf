@@ -25,7 +25,7 @@ def masked_mse(input, target, mask):
     diff = (input - target) ** 2.0
     count = np.sum(mask)
 
-    return np.sum(diff * mask.astype(np.float)) / count
+    return np.sum(diff * mask.astype(float)) / count
 
 
 def masked_l1(input, target, mask):
@@ -44,7 +44,26 @@ def masked_l1(input, target, mask):
     diff = np.abs(input - target)
     count = np.sum(mask)
 
-    return np.sum(diff * mask.astype(np.float)) / count
+    return np.sum(diff * mask.astype(float)) / count
+
+
+def masked_badpix(input, target, mask, threshold=0.07):
+    """
+    Comput L1 loss only for pixels which are True in mask
+
+    :param input: the prediction
+    :type input: numpy.ndarray
+
+    :param target: the ground truth
+    :type target: numpy.ndarray
+
+    :param mask: the mask
+    :type mask: numpy.ndarray(dtype=numpy.bool)
+    """
+    diff = (np.abs(input - target) > 0.07).astype(float)
+    count = np.sum(mask)
+
+    return np.sum(diff * mask.astype(float)) / count
 
 
 def auc(curve, step):
@@ -59,7 +78,7 @@ def auc(curve, step):
     """
     auc = 0.0
     for i in range(len(curve) - 1):
-        auc += (curve[i] + curve[i+1]) / 2.0 * step
+        auc += (curve[i] + curve[i + 1]) / 2.0 * step
 
     return auc
 
@@ -67,14 +86,14 @@ def auc(curve, step):
 @click.command()
 @click.argument('output_dir', type=click.Path(exists=True))
 @click.option('--step', default=0.01, help='Step size for sparsification.')
-@click.option('--mse/--l1', default=True, help='Use MSE or L1 loss?')
+@click.option('--mse/--badpix', default=True, help='Use MSE or L1 loss?')
 @click.option('--random', is_flag=True, default=False, help='Use Random Baseline?')
 def main(output_dir, step, mse, random):
     # set loss function
     if mse:
         loss_fn = masked_mse
     else:
-        loss_fn = masked_l1
+        loss_fn = masked_badpix
 
     scenes = [f.path for f in os.scandir(
         os.path.join(output_dir, 'scenes')) if f.is_dir()]
@@ -99,8 +118,8 @@ def main(output_dir, step, mse, random):
         error = np.abs(result - gt)
 
         # create masks
-        mask_oracle = np.zeros_like(gt, dtype=np.bool)
-        mask_uncert = np.zeros_like(gt, dtype=np.bool)
+        mask_oracle = np.zeros_like(gt, dtype=bool)
+        mask_uncert = np.zeros_like(gt, dtype=bool)
 
         # sparsification
         for i, fract in enumerate(np.arange(0.0, 1.000000001, step)):
@@ -126,14 +145,14 @@ def main(output_dir, step, mse, random):
                         img_out[y, x, :] = img[y, x, :]
                     if mask_oracle[y * img.shape[1] + x]:
                         img_out_oracle[y, x, :] = img[y, x, :]
-            
+
             border = 32
             out = np.zeros((img.shape[0], 2 * img.shape[1] + border, 3))
             out[:, 0:img.shape[1], :] = img_out
             out[:, img.shape[1] + border:, :] = img_out_oracle
             out = np.pad(out, ((104, 104), (112, 112), (0, 0)))
 
-            imsave(os.path.join(scene, f'sparse_{i:04d}.png'), np.flip(out, 0))
+            # imsave(os.path.join(scene, f'sparse_{i:04d}.png'), np.flip(out, 0))
 
             loss_oracle = loss_fn(result, gt, mask_oracle)
             loss_uncert = loss_fn(result, gt, mask_uncert)
