@@ -119,12 +119,12 @@ def main(output_dir, **kwargs):
 
     if kwargs['train_loss_multimodal']:
         loss_fn = loss.MultiMaskedL1Loss()
-        loss_uncert_fn = loss.MultiUncertaintyL1Loss()
+        loss_uncert_fn = loss.ImprovedMultiUncertaintyL1Loss()
         loss_discrete_fn = loss.MaskedCrossEntropy()
 
     else:
         loss_fn = loss.MaskedL1Loss()
-        loss_uncert_fn = loss.UncertaintyL1Loss()
+        loss_uncert_fn = loss.ImprovedUncertaintyL1Loss()
         loss_discrete_fn = loss.MaskedCrossEntropy()
         # loss_invertible_fn = loss.InformationBottleneckLoss(kwargs['train_beta'])
 
@@ -175,7 +175,7 @@ def main(output_dir, **kwargs):
         print(header, file=log)
 
     # model saver
-    model_saver = ModelSaver(only_best=True)
+    model_saver = ModelSaver(only_best=False)
 
     loss_val_avg = 0.0
     mse_avg = 0.0
@@ -190,9 +190,6 @@ def main(output_dir, **kwargs):
             if kwargs['train_loss_strongest']:
                 inds = torch.max(mpi[:, :, 3, :, :], dim=1)[1].unsqueeze(1)
                 gt = torch.gather(mpi[:, :, 4, :, :], dim=1, index=inds).squeeze()
-
-            if kwargs['train_loss_multimodal']:
-                gt = mpi
 
             mask = mask.int() * loss.create_mask_margin(mask.shape, 11)
 
@@ -217,11 +214,15 @@ def main(output_dir, **kwargs):
             mpi = mpi.cuda()
 
             mask = mask.cuda()
+            mask_padding = None
             if kwargs['train_loss_padding'] is not None:
                 if kwargs['train_loss_multimodal']:
                     mpi[:, :, 3, :, :] *= (torch.abs(mpi[:, :, 4, :, :]) < kwargs['train_loss_padding']).float()
                 else:
-                    mask = mask.int() * (torch.abs(gt) < kwargs['train_loss_padding']).int()
+                    mask_padding = (torch.abs(gt) < kwargs['train_loss_padding']).int().cuda()
+
+            if kwargs['train_loss_multimodal']:
+                gt = mpi
 
             if kwargs['train_eval_mode'] and i >= kwargs['train_eval_mode_start']:
                 model.eval()
@@ -244,7 +245,7 @@ def main(output_dir, **kwargs):
             output = model(h_views, v_views, i_views, d_views)
 
             if kwargs['model_uncert']:
-                loss_train = loss_uncert_fn(output, gt, mask)
+                loss_train = loss_uncert_fn(output, gt, mask, mask_padding)
             elif kwargs['model_discrete']:
                 loss_train = loss_discrete_fn(output, gt_classes, mask)
             elif kwargs['model_invertible']:
