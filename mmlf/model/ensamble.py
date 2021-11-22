@@ -96,7 +96,6 @@ class Ensamble(nn.Module):
             (b, len(means), h, w)).to(means[0].device)
 
         for i in range(len(means)):
-            print(posterior.shape)
             posterior += laplacian(disp, means[i], vars[i])
 
         posterior /= float(len(means))

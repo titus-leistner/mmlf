@@ -23,6 +23,54 @@ def prob_laplace(disp, mean, logvar):
     return prob
 
 
+def nll_laplace(mpi, mean, logvar, mask):
+
+    disp = mpi[:, :, 4]
+    alpha = mpi[:, :, 3]
+    mean = np.expand_dims(mean, 1)
+    var = np.exp(np.expand_dims(logvar, 1))
+
+    prob = np.exp(-(np.abs(mean - disp)) / var) / var / 2.0 + 0.00001
+    # prob /= np.sum(prob, 1, keepdims=True)
+
+    nllh = np.sum(alpha * -np.log(prob), axis=1)
+
+    if mask is not None:
+        count = np.sum(mask)
+        nllh *= mask
+
+        result = np.sum(nllh) / count
+
+    else:
+        result = np.mean(nllh)
+
+    print(result)
+    return result
+
+
+def nll_discrete(weights, posterior, vmin, vmax, mask):
+    epsilon = 0.00001
+    weights += epsilon
+    posterior += epsilon
+
+    weights /= np.sum(weights, 1, keepdims=True)
+    posterior /= np.sum(posterior, 1, keepdims=True) * 7.0
+
+    nllh = np.sum(weights * -np.log(posterior), axis=1)
+
+    if mask is not None:
+        count = np.sum(mask)
+        nllh *= mask
+
+        result = np.sum(nllh) / count
+
+    else:
+        result = np.mean(nllh)
+
+    print(result)
+    return result
+
+
 def cdf_laplace(disp, mean, var):
     le = disp < mean
     ge = np.logical_not(le)
@@ -56,10 +104,11 @@ def laplace_to_discrete(n_bins, x_min, x_max, mean, logvar):
 def lmm_to_discrete(n_bins, x_min, x_max, means, logvars):
     count = means.shape[0]
 
-    result = np.zeros(means.shape[1:])
-    for i in range(means.shape[0]):
+    shape = (means.shape[1], n_bins, means.shape[2], means.shape[3])
+    result = np.zeros(shape)
+    for i in range(count):
         print('Discretize Laplacian ', i)
-        laplace_to_discrete(n_bins, x_min, x_max, means[i], logvars[i])
+        result += laplace_to_discrete(n_bins, x_min, x_max, means[i], logvars[i])
 
     result /= count
 
@@ -114,17 +163,10 @@ def likelihood_lmm(mpi, means, logvars):
     return likelihood_laplace(mpi, mean, logvar) / float(count)
 
 
-def likelihood_discrete(weights, posterior):
-    weights += 0.00001
-    weights /= np.sum(weights, 1, keepdims=True)
-    print(np.mean(weights * posterior))
-    return np.mean(weights * posterior)
-
-
-def multimodal_mask(mpi, threshhold=0.1):
+def multimodal_mask(mpi, threshhold=0.3):
     alpha = mpi[:, :, 3]
 
-    mask = (np.sum(alpha > 0.1, 1) > 1).astype(float)
+    mask = (np.sum(alpha > threshhold, 1) > 1).astype(float)
 
     return mask
 
@@ -212,6 +254,7 @@ def main(output_dir, dataset, model_invertible, model_discrete,
         kld_avg = 0.0
         kld_mm_avg = 0.0
         kld_um_avg = 0.0
+        nll_eval_avg = 0.0
         for i, data in enumerate(valloader):
             if i == len(valset.scenes):
                 break
@@ -236,7 +279,11 @@ def main(output_dir, dataset, model_invertible, model_discrete,
             bad_pix = bad_pix_fn(output, gt, mask)
             bad_pix_avg += bad_pix
 
+            print(mse, bad_pix)
+
             # save results
+            if kwargs['model_discrete']:
+                weights = mpi_to_weights(mpi, model.disp_min, model.disp_max, model.steps).cpu().numpy()
             dist_gt = mpi_to_weights(mpi, kwargs['val_disp_min'], kwargs['val_disp_max'], 108).cpu().numpy()
             mpi = mpi.cpu().numpy()
             mean = output['mean'].cpu().numpy()  # + kwargs['train_shift']
@@ -263,22 +310,26 @@ def main(output_dir, dataset, model_invertible, model_discrete,
             if posterior is not None:
                 posterior = posterior.cpu().numpy()
             runtime = time.time() - t_start
-            valset.save_batch(output_dir, index.numpy(), mean - kwargs['train_shift'],
+            valset.save_batch(output_dir, index.numpy(), mean,
                               logvar, runtime, lmm, nll, posterior)
 
+            mask = multimodal_mask(mpi)
             if kwargs['val_ensamble']:
                 dist = lmm_to_discrete(108, kwargs['val_disp_min'], kwargs['val_disp_max'], means, logvars)
+                nll_eval = 0.0
             elif kwargs['model_discrete']:
                 dist = posterior
+                nll_eval = nll_discrete(weights, posterior, kwargs['val_disp_min'], kwargs['val_disp_max'], None)
             elif kwargs['model_uncert']:
                 dist = laplace_to_discrete(108, kwargs['val_disp_min'], kwargs['val_disp_max'], mean, logvar)
+                nll_eval = nll_laplace(mpi, mean, logvar, None)
             else:
-                dist = laplace_to_discrete(108, kwargs['val_disp_min'],
-                                           kwargs['val_disp_max'], mean, np.zeros_like(mean))
-                # dist = mean_to_discrete(108, kwargs['val_disp_min'],
-                #                         kwargs['val_disp_max'], mean)
+                # dist = laplace_to_discrete(108, kwargs['val_disp_min'],
+                #                            kwargs['val_disp_max'], mean, np.zeros_like(mean))
+                nll_eval = nll_laplace(mpi, mean, np.zeros_like(mean), None)
+                dist = mean_to_discrete(108, kwargs['val_disp_min'],
+                                        kwargs['val_disp_max'], mean)
 
-            mask = multimodal_mask(mpi)
             kld = kl_divergence(dist, dist_gt)
             kld_mm = kl_divergence(dist, dist_gt, mask)
             kld_um = kl_divergence(dist, dist_gt, 1.0 - mask)
@@ -287,15 +338,18 @@ def main(output_dir, dataset, model_invertible, model_discrete,
             kld_avg += kld
             kld_mm_avg += kld_mm
             kld_um_avg += kld_um
+            nll_eval_avg += nll_eval
 
         mse_avg /= (i + 1)
         bad_pix_avg /= (i + 1)
         kld_avg /= (i + 1)
         kld_mm_avg /= (i + 1)
         kld_um_avg /= (i + 1)
+        nll_eval_avg /= (i + 1)
 
     print('MSE & BadPix007 & KLD_UM & KLD_MM & KLD & - & TIME \\\\')
     print(f'{mse_avg:.3f} & {bad_pix_avg:.3f} & {kld_um_avg:.3f} & {kld_mm_avg:.3f} & {kld_avg:.3f} & - & {runtime:.3f} \\\\')
+    print('NLL: ', nll_eval)
 
 
 if __name__ == '__main__':
