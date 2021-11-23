@@ -77,7 +77,7 @@ class HCI4D:
     """
 
     def __init__(self, root, nviews=(9, 9), transform=None, cache=False,
-                 length=0):
+                 length=0, load_dict=False):
         """
         Loads the dataset
 
@@ -114,6 +114,7 @@ class HCI4D:
         self.nviews = nviews
         self.transform = transform
         self.length = length
+        self.load_dict = load_dict
 
         self.cache = cache
         if cache:
@@ -239,7 +240,18 @@ class HCI4D:
         # no loss if no texture
         mask *= create_mask_texture(torch.from_numpy(center).unsqueeze(0), 23, 0.02).squeeze().int().numpy()
 
-        return h_views, v_views, i_views, d_views, center, gt, mpi, mask, index
+        if self.load_dict:
+            import scipy.io as spio
+            scene_dict = spio.loadmat(os.path.join(scene, 'data_k.mat'))['dic_k']
+            dict_dict = scene_dict[0][0][0]
+            dict_labels = scene_dict[0][0][1]
+            dict_range = scene_dict[0][0][4]
+
+            data = h_views, v_views, i_views, d_views, center, gt, mpi, mask, index, dict_dict, dict_labels, dict_range
+
+        else:
+            data = h_views, v_views, i_views, d_views, center, gt, mpi, mask, index
+        return data
 
     def cache_scenes(self):
         """
