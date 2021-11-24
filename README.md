@@ -9,9 +9,8 @@ Multimodal Light Field Depth Estimation
 
 
 ## Installation
-For the installation I recommend a python venv.
+For the installation we recommend a python venv.
 ```sh
-git clone git@github.com:Titus Leistner/mmlf.git
 cd mmlf/
 python3 -m venv .
 source bin/activate
