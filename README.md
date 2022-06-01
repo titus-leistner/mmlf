@@ -1,14 +1,22 @@
-# mmlf
+# Towards Multimodal Depth Estimation from Light Fields
+Implementation of our (paper)[https://arxiv.org/pdf/2203.16542.pdf] published at CVPR 2022.
 
-Multimodal Light Field Depth Estimation
+![teaser figure](imgs/teaser.png)
 
 ## Requirements
 * Python 3.8 or higher
-* CUDA
-* cuDNN
-
+* NVidia GPU
 
 ## Installation
+First, download the network checkpoints and the dataset [here](https://drive.google.com/drive/folders/1bxfFCbXlVR6LJB7LTbyLD5_0OfgXVALi?usp=sharing) and unzip both.
+```sh
+unzip mmlf-dataset.zip
+unzip mmlf-params.zip
+```
+Next, clone this repository.
+```sh
+git clone https://github.com/titus-leistner/mmlf.git
+```
 For the installation we recommend a python venv.
 ```sh
 cd mmlf/
@@ -73,3 +81,13 @@ python -m mmlf.validate.cli  --train_shift=2.5 --model_discrete  ../mmlf-params/
     │   ├── validate                            <- Scripts to validate models
     │   │
     │   └── visualize                           <- Scripts to create exploratory and results oriented visualizations
+
+## Citation
+```bibtex
+@article{leistner2022multimodal,
+    title={Towards Multimodal Depth Estimation from Light Fields},
+    author={Leistner, Titus and Mackowiak, Radek and Ardizzone, Lynton and K{\"o}the, Ullrich and Rother, Carsten},
+    journal={arXiv preprint arXiv},
+    year={2022}
+}
+```
