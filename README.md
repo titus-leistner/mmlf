@@ -1,5 +1,5 @@
 # Towards Multimodal Depth Estimation from Light Fields
-Implementation of our (paper)[https://arxiv.org/pdf/2203.16542.pdf] published at CVPR 2022.
+Implementation of our [paper](https://arxiv.org/pdf/2203.16542.pdf) published at CVPR 2022. Also visit our [project page](https://titus-leistner.de/towards-multimodal-depth-estimation-from-light-fields.html).
 
 ![teaser figure](imgs/teaser.png)
 
