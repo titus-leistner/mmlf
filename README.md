@@ -68,7 +68,7 @@ python -m mmlf.validate.cli  --train_shift=2.5 --model_discrete  ../mmlf-params/
     ├── requirements.txt                        <- The requirements file for reproducing the analysis environment, e.g.
     │                                              generated with `pip freeze > requirements.txt`
     │
-    ├── mmlf           <- Source code for use in this project.
+    ├── mmlf                                    <- Source code for use in this project.
     │   │
     │   ├── data                                <- Scripts to download or generate data
     │   │
