@@ -35,10 +35,10 @@ python -m mmlf.train.cli ../mmlf-params/base-um  --train_trainset=../mmlf-datase
 python -m mmlf.train.cli ../mmlf-params/upr-um  --train_trainset=../mmlf-dataset/train --train_shift=2.5 --train_valset=../mmlf-dataset/val --train_lr=1e-3 --train_bs=512 --train_ps=96  --train_warm_start --model_uncert
 
 # ESE
-python -m mmlf.train.cli ../mmlf-params/ese-um  --train_trainset=../mmlf-dataset/train --train_shift=2.5 --train_valset=../mmlf-dataset/val --train_lr=1e-3 --train_bs=512 --train_ps=96  --train_warm_start --model_uncert
+python -m mmlf.train.cli ../mmlf-params/ese-um  --train_trainset=../mmlf-dataset/train --train_shift=2.5 --train_valset=../mmlf-dataset/val --train_lr=1e-3 --train_bs=512 --train_ps=96  --train_warm_start --model_uncert --val_ensamble
 
 # DPP
-python -m mmlf.train.cli ../mmlf-params/dpp-um  --train_trainset=../mmlf-dataset/train --train_shift=2.5 --train_valset=../mmlf-dataset/val --train_lr=1e-3 --train_bs=512 --train_ps=96  --train_warm_start --model_uncert --val_ensamble
+python -m mmlf.train.cli ../mmlf-params/dpp-um  --train_trainset=../mmlf-dataset/train --train_shift=2.5 --train_valset=../mmlf-dataset/val --train_lr=1e-3 --train_bs=512 --train_ps=96  --train_warm_start --model_discrete
 ```
 
 To use the multimodal loss, add `--train_loss_multimodal`. Please note that we trained on a system with 8 NVidia A100 GPUs. I you want to train on a smaller system (which also works fine), you have to adjust learning rate and batch size to your needs.
